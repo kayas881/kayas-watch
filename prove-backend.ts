@@ -31,7 +31,7 @@ async function main() {
     body: new URLSearchParams({
       csrfToken: csrfToken,
       email: "admin@kayasadmin.com",
-      password: "kayasadmin2026",
+      password: process.env.ADMIN_PASSWORD || "",
       json: "true"
     })
   });

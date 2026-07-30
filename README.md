@@ -29,7 +29,7 @@ Backed by [Uptime Kuma](https://github.com/louislam/uptime-kuma) as the monitori
    
    # Seed Credentials
    ADMIN_EMAIL="admin@kayasadmin.com"
-   ADMIN_PASSWORD="kayasadmin2026"
+   ADMIN_PASSWORD="your_admin_password"
    ```
    *Note: Ensure you setup Uptime Kuma's initial user/password manually on `http://localhost:3001` matching the `UPTIME_KUMA_USER` and `UPTIME_KUMA_PASSWORD` before attempting to create monitors.*
 
@@ -49,7 +49,7 @@ Backed by [Uptime Kuma](https://github.com/louislam/uptime-kuma) as the monitori
    npx prisma db seed
    ```
    This command creates:
-   - SuperAdmin (`admin@kayasadmin.com` / `kayasadmin2026`)
+   - SuperAdmin (`admin@kayasadmin.com` / `your_admin_password`)
    - A mock Client ("Acme Corp")
    - A mock Website for Acme Corp
 
