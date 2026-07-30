@@ -190,10 +190,15 @@ export async function syncWebsitesToMonitors() {
     include: { monitors: true }
   });
 
-  let createdCount = 0;
+  let syncedCount = 0;
 
   for (const website of websites) {
-    if (website.monitors.length > 0) continue;
+    const existingMonitor = website.monitors[0];
+
+    // Skip if already synced to Uptime Kuma
+    if (existingMonitor && existingMonitor.kumaMonitorId !== null) {
+      continue;
+    }
 
     let kumaMonitorId: number | null = null;
     try {
@@ -204,28 +209,38 @@ export async function syncWebsitesToMonitors() {
         intervalSeconds: 60,
         retryPolicy: 3
       });
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 150));
     } catch (kumaErr) {
       console.error(`Failed to sync to Kuma for ${website.url}:`, kumaErr);
     }
 
-    try {
-      await prisma.monitor.create({
-        data: {
-          name: website.name,
-          url: website.url,
-          websiteId: website.id,
-          type: "http",
-          intervalSeconds: 60,
-          retryPolicy: 3,
-          kumaMonitorId,
-          status: "UP",
-          isActive: true
-        }
-      });
-      createdCount++;
-    } catch (dbErr) {
-      console.error(`Failed to create DB monitor for ${website.url}:`, dbErr);
+    if (existingMonitor) {
+      if (kumaMonitorId !== null) {
+        await prisma.monitor.update({
+          where: { id: existingMonitor.id },
+          data: { kumaMonitorId }
+        });
+        syncedCount++;
+      }
+    } else {
+      try {
+        await prisma.monitor.create({
+          data: {
+            name: website.name,
+            url: website.url,
+            websiteId: website.id,
+            type: "http",
+            intervalSeconds: 60,
+            retryPolicy: 3,
+            kumaMonitorId,
+            status: "UP",
+            isActive: true
+          }
+        });
+        syncedCount++;
+      } catch (dbErr) {
+        console.error(`Failed to create DB monitor for ${website.url}:`, dbErr);
+      }
     }
   }
 
@@ -234,5 +249,5 @@ export async function syncWebsitesToMonitors() {
   revalidatePath("/monitors");
   revalidatePath("/");
 
-  return createdCount;
+  return syncedCount;
 }
