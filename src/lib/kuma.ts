@@ -11,23 +11,25 @@ async function getClient() {
   return client;
 }
 
-export async function setupWebhookNotification(client: UptimeKumaClient, webhookUrl: string): Promise<number> {
-  const notifications = await client.getNotifications();
-  
-  const existing = notifications.find(n => {
-    try {
-      const config = JSON.parse(n.config as string);
-      return config.type === 'webhook';
-    } catch {
-      return false;
-    }
-  });
+export async function setupWebhookNotification(client: UptimeKumaClient, webhookUrl: string): Promise<number | undefined> {
+  try {
+    const notifications = await client.getNotifications();
+    const existing = notifications.find(n => {
+      try {
+        const config = JSON.parse(n.config as string);
+        return config.type === 'webhook';
+      } catch {
+        return false;
+      }
+    });
 
-  if (existing && existing.id) {
-    return existing.id;
+    if (existing && existing.id) {
+      return existing.id;
+    }
+  } catch (err) {
+    console.warn("Could not fetch notifications from Uptime Kuma:", err);
   }
-  
-  throw new Error("MANUAL_SETUP_REQUIRED: The Uptime Kuma socket client times out when trying to programmatically create a Notification. Please log into Uptime Kuma, go to Settings -> Notifications, and create a Webhook notification pointing to " + webhookUrl);
+  return undefined;
 }
 
 export async function syncMonitorToKuma(monitorData: { name: string, type: string, url: string, intervalSeconds: number, retryPolicy: number }): Promise<number> {
@@ -43,7 +45,7 @@ export async function syncMonitorToKuma(monitorData: { name: string, type: strin
       interval: monitorData.intervalSeconds,
       retryInterval: monitorData.intervalSeconds,
       maxretries: monitorData.retryPolicy,
-      notificationIDList: [notificationId],
+      notificationIDList: notificationId ? [notificationId] : [],
     };
     const res = await client.addMonitor(newMonitor);
     if (!res.id) throw new Error("No monitor ID returned from Kuma");
