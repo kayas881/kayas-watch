@@ -55,6 +55,42 @@ export async function syncMonitorToKuma(monitorData: { name: string, type: strin
   }
 }
 
+export async function bulkSyncMonitorsToKuma(
+  monitorsData: { id?: string; name: string; type: string; url: string; intervalSeconds: number; retryPolicy: number }[]
+): Promise<{ id?: string; kumaMonitorId: number | null }[]> {
+  const client = await getClient();
+  const results: { id?: string; kumaMonitorId: number | null }[] = [];
+  try {
+    const webhookUrl = process.env.NEXT_PUBLIC_APP_URL
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/kuma`
+      : "http://host.docker.internal:3000/api/webhooks/kuma";
+    const notificationId = await setupWebhookNotification(client, webhookUrl);
+
+    for (const monitorData of monitorsData) {
+      try {
+        const newMonitor: Monitor = {
+          name: monitorData.name,
+          type: monitorData.type.toLowerCase() as MonitorType,
+          url: monitorData.url,
+          interval: monitorData.intervalSeconds,
+          retryInterval: monitorData.intervalSeconds,
+          maxretries: monitorData.retryPolicy,
+          notificationIDList: notificationId ? [notificationId] : [],
+        };
+        const res = await client.addMonitor(newMonitor);
+        results.push({ id: monitorData.id, kumaMonitorId: res.id || null });
+        await new Promise((r) => setTimeout(r, 100));
+      } catch (err) {
+        console.error(`Failed to add monitor ${monitorData.url} in bulk:`, err);
+        results.push({ id: monitorData.id, kumaMonitorId: null });
+      }
+    }
+  } finally {
+    client.disconnect();
+  }
+  return results;
+}
+
 export async function editMonitorInKuma(kumaMonitorId: number, monitorData: { name: string, type: string, url: string, intervalSeconds: number, retryPolicy: number }) {
   const client = await getClient();
   try {
