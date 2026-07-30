@@ -146,3 +146,41 @@ export async function deleteMonitor(id: string) {
   revalidatePath("/monitors");
   redirect("/monitors");
 }
+
+import { handleMonitorStatusChange } from "@/lib/incidents";
+
+export async function refreshAllMonitorsHealth() {
+  const monitors = await prisma.monitor.findMany({
+    where: { isActive: true }
+  });
+
+  await Promise.allSettled(
+    monitors.map(async (m) => {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch(m.url, {
+          method: "GET",
+          signal: controller.signal,
+          headers: { "User-Agent": "kayas-Watch-Checker/1.0" }
+        });
+        clearTimeout(timeoutId);
+
+        const isUp = res.ok;
+        const newStatus = isUp ? "UP" : "DOWN";
+        const msg = isUp ? `HTTP ${res.status} OK` : `HTTP ${res.status} Error`;
+
+        await handleMonitorStatusChange(m.kumaMonitorId || m.id, newStatus, msg);
+      } catch (err: any) {
+        const msg = err.message || "Connection timeout / failed";
+        await handleMonitorStatusChange(m.kumaMonitorId || m.id, "DOWN", msg);
+      }
+    })
+  );
+
+  revalidatePath("/monitors");
+  revalidatePath("/websites");
+  revalidatePath("/incidents");
+  revalidatePath("/");
+  return monitors.length;
+}

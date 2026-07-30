@@ -1,13 +1,15 @@
 import { prisma } from "./prisma";
 
-export async function handleMonitorStatusChange(kumaMonitorId: number, status: "UP" | "DOWN", summary: string) {
-  // First, find the monitor in our DB mapping to this kuma ID
-  const monitor = await prisma.monitor.findFirst({
-    where: { kumaMonitorId }
-  });
+export async function handleMonitorStatusChange(monitorIdOrKumaId: string | number, status: "UP" | "DOWN", summary: string) {
+  let monitor;
+  if (typeof monitorIdOrKumaId === "number") {
+    monitor = await prisma.monitor.findFirst({ where: { kumaMonitorId: monitorIdOrKumaId } });
+  } else {
+    monitor = await prisma.monitor.findUnique({ where: { id: String(monitorIdOrKumaId) } });
+  }
 
   if (!monitor) {
-    console.warn(`No local monitor found for kuma ID ${kumaMonitorId}`);
+    console.warn(`No local monitor found for ID ${monitorIdOrKumaId}`);
     return;
   }
 

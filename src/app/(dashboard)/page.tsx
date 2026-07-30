@@ -5,6 +5,8 @@ import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
+import { RefreshStatusButton } from "@/components/RefreshStatusButton";
+
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
@@ -37,9 +39,12 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div>
-        <h1 className="text-3xl font-semibold text-white tracking-tight">Dashboard Overview</h1>
-        <p className="text-zinc-400 mt-1">Real-time status of all client monitors and active incidents.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold text-white tracking-tight">Dashboard Overview</h1>
+          <p className="text-zinc-400 mt-1">Real-time status of all client monitors and active incidents.</p>
+        </div>
+        <RefreshStatusButton />
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
