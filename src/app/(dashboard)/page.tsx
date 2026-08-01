@@ -39,10 +39,15 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold text-white tracking-tight">Dashboard Overview</h1>
-          <p className="text-zinc-400 mt-1">Real-time status of all client monitors and active incidents.</p>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-bold uppercase tracking-wider">
+              Saral Infosoft Core
+            </span>
+          </div>
+          <h1 className="text-3xl font-extrabold text-white tracking-tight">Dashboard Overview</h1>
+          <p className="text-zinc-400 text-sm mt-1">Real-time status of client websites, uptime monitors, and infrastructure incidents.</p>
         </div>
         <RefreshStatusButton />
       </div>

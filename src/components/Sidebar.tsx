@@ -36,16 +36,16 @@ export function Sidebar() {
               key={item.name}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all group",
+                "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all group",
                 isActive
-                  ? "bg-violet-600/10 text-violet-400"
+                  ? "bg-gradient-to-r from-purple-600/20 to-violet-900/30 text-purple-300 border border-purple-500/20 shadow-md shadow-purple-950/40"
                   : "text-zinc-400 hover:bg-white/5 hover:text-white"
               )}
             >
               <item.icon
                 className={cn(
-                  "w-5 h-5",
-                  isActive ? "text-violet-500" : "text-zinc-500 group-hover:text-zinc-400"
+                  "w-5 h-5 transition-transform group-hover:scale-110",
+                  isActive ? "text-purple-400" : "text-zinc-500 group-hover:text-zinc-300"
                 )}
               />
               {item.name}

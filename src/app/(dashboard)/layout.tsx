@@ -20,11 +20,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen bg-[var(--color-background)] flex flex-col">
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-50">
         <div className="w-full px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3 w-64">
-            <div className="w-8 h-8 rounded-lg bg-violet-600/20 border border-violet-500/20 flex items-center justify-center glow-primary">
-              <Activity className="w-4 h-4 text-violet-500" />
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-600/30 to-violet-900/40 border border-purple-500/30 flex items-center justify-center glow-primary">
+              <Activity className="w-5 h-5 text-purple-400" />
             </div>
-            <span className="font-semibold text-white tracking-tight">Kayas Watch</span>
+            <div className="flex flex-col">
+              <span className="font-bold text-white tracking-tight text-base flex items-center gap-2">
+                Saral Watch
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-950/80 text-purple-300 border border-purple-500/30 font-semibold tracking-wider uppercase">
+                  Saral Infosoft
+                </span>
+              </span>
+              <span className="text-[11px] text-zinc-400 font-medium">Web & Infrastructure Monitor</span>
+            </div>
           </div>
 
           <div className="flex items-center gap-6">

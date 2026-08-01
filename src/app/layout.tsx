@@ -3,8 +3,8 @@ import "./globals.css";
 import AuthWrapper from "@/components/ui/AuthWrapper";
 
 export const metadata: Metadata = {
-  title: "Kayas Watch",
-  description: "Uptime Kuma dashboard for Kayas Infosoft",
+  title: "Saral Watch | Saral Infosoft Web Monitor",
+  description: "Real-time client website and service monitoring platform by Saral Infosoft.",
 };
 
 export default function RootLayout({

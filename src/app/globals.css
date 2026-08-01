@@ -1,43 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --color-background: #0a0a0a;
-  --color-foreground: #ededed;
+  --color-background: #0b0d14;
+  --color-foreground: #f1f5f9;
   
-  --color-primary: #8b5cf6; /* Violet 500 */
-  --color-primary-hover: #7c3aed; /* Violet 600 */
+  --color-primary: #7c52a2; /* Saral Corporate Violet */
+  --color-primary-hover: #6d28d9; /* Deep Violet */
   
-  --color-surface: #171717; /* Neutral 900 */
-  --color-surface-hover: #262626; /* Neutral 800 */
+  --color-surface: #111420; /* Saral Slate Surface */
+  --color-surface-hover: #1b2030;
   
-  --color-border: #262626; /* Neutral 800 */
+  --color-border: #1e2436;
   
-  --color-success: #10b981; /* Emerald 500 */
-  --color-error: #ef4444; /* Red 500 */
+  --color-success: #10b981; /* Emerald */
+  --color-error: #f43f5e; /* Rose / Red */
   
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 }
 
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 .glass {
-  background: rgba(23, 23, 23, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(17, 20, 32, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(124, 82, 162, 0.2);
+}
+
+.saral-glass-card {
+  background: linear-gradient(135deg, rgba(124, 82, 162, 0.12), rgba(139, 92, 246, 0.05), rgba(17, 20, 32, 0.8));
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  box-shadow: 0 12px 30px rgba(124, 82, 162, 0.1);
 }
 
 .glow-primary {
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.15);
+  box-shadow: 0 0 25px rgba(124, 82, 162, 0.25);
 }
 
 .glow-error {
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+  box-shadow: 0 0 25px rgba(244, 63, 94, 0.25);
+}
+
+.saral-badge {
+  background: linear-gradient(135deg, #7c52a2, #6d28d9);
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
