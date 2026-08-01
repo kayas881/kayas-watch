@@ -195,16 +195,31 @@ async function probeDownSite(url: string): Promise<{ httpStatusCode: number; err
       errorDetail: `HTTP ${res.status} ${statusText}`,
     };
   } catch (err: any) {
-    const isTimeout = err.name === "AbortError";
-    const isCert    = err.message?.includes("certificate") || err.message?.includes("SSL");
-    const isDns     = err.message?.includes("ENOTFOUND") || err.message?.includes("getaddrinfo");
-    const isRefused = err.message?.includes("ECONNREFUSED");
+    // Node.js fetch wraps real errors in a "fetch failed" TypeError with a `cause`
+    // Dig into the cause chain to get the real error
+    const cause      = err.cause;
+    const causeMsg   = cause?.message || cause?.code || "";
+    const combined   = `${err.message || ""} ${causeMsg}`.toLowerCase();
 
-    const detail = isTimeout  ? "Connection timed out — server not responding"
-                 : isCert     ? "SSL/TLS certificate error"
-                 : isDns      ? "DNS resolution failed — domain not found"
-                 : isRefused  ? "Connection refused by server"
-                 : (err.message || "Network failure");
+    const isTimeout  = err.name === "AbortError";
+    const isCert     = combined.includes("certificate") || combined.includes("ssl") ||
+                       combined.includes("self_signed") || combined.includes("tls") ||
+                       combined.includes("cert_");
+    const isDns      = combined.includes("enotfound") || combined.includes("getaddrinfo") ||
+                       combined.includes("nodename") || combined.includes("name or service");
+    const isRefused  = combined.includes("econnrefused") || combined.includes("connection refused");
+    const isReset    = combined.includes("econnreset") || combined.includes("connection reset");
+    const isTimeout2 = combined.includes("etimedout") || combined.includes("timed out");
+
+    const detail = isTimeout   ? "Connection timed out — server not responding"
+                 : isCert      ? "SSL/TLS certificate error — certificate invalid or expired"
+                 : isDns       ? "DNS resolution failed — domain not found or unreachable"
+                 : isRefused   ? "Connection refused — server is actively rejecting requests"
+                 : isReset     ? "Connection reset by remote server"
+                 : isTimeout2  ? "Connection timed out — server not responding"
+                 : causeMsg    ? causeMsg
+                 : (err.message && err.message !== "fetch failed") ? err.message
+                 : "Server unreachable — no response";
 
     return { httpStatusCode: 0, errorDetail: detail };
   }
