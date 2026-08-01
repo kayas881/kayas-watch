@@ -108,14 +108,16 @@ model Monitor {
 }
 
 model Incident {
-  id          String    @id @default(uuid())
-  monitorId   String
-  status      String    @default("OPEN") // OPEN, ACKNOWLEDGED, RESOLVED
-  severity    String    @default("HIGH") // CRITICAL, HIGH, MEDIUM, LOW
-  openedAt    DateTime  @default(now())
-  resolvedAt  DateTime?
-  summary     String?
-  
+  id              String    @id @default(uuid())
+  monitorId       String
+  status          String    @default("OPEN") // OPEN, ACKNOWLEDGED, RESOLVED
+  severity        String    @default("HIGH") // CRITICAL, HIGH, MEDIUM, LOW
+  openedAt        DateTime  @default(now())
+  resolvedAt      DateTime?
+  summary         String?
+  httpStatusCode  Int?      // e.g. 500, 503, 404, 0 for timeout/connection error
+  errorDetail     String?   // Human-readable error captured at downtime
+
   monitor     Monitor        @relation(fields: [monitorId], references: [id], onDelete: Cascade)
   notes       IncidentNote[]
 }

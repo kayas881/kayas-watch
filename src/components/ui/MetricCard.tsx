@@ -1,14 +1,17 @@
 import { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 interface MetricCardProps {
   title: string;
   value: string | number;
   icon: LucideIcon;
-  trend?: {
-    value: string;
-    isPositive: boolean;
+  subStat?: {
+    label: string;
+    value: string | number;
+    color?: "green" | "red" | "amber" | "zinc";
   };
+  href?: string;
   color?: "default" | "green" | "red" | "violet";
 }
 
@@ -22,15 +25,23 @@ const colorMap = {
 const cardBorderMap = {
   default: "border-blue-500/20 hover:border-blue-500/40",
   green: "border-emerald-500/20 hover:border-emerald-500/40",
-  red: "border-rose-500/30 hover:border-rose-500/50 shadow-rose-950/20",
-  violet: "border-purple-500/30 hover:border-purple-500/50 shadow-purple-950/20",
+  red: "border-rose-500/30 hover:border-rose-500/50",
+  violet: "border-purple-500/30 hover:border-purple-500/50",
 };
 
-export function MetricCard({ title, value, icon: Icon, trend, color = "default" }: MetricCardProps) {
-  return (
+const subStatColorMap = {
+  green: "text-emerald-400",
+  red: "text-rose-400",
+  amber: "text-amber-400",
+  zinc: "text-zinc-400",
+};
+
+export function MetricCard({ title, value, icon: Icon, subStat, href, color = "default" }: MetricCardProps) {
+  const inner = (
     <div className={cn(
       "saral-glass-card p-6 rounded-2xl flex flex-col h-full transition-all duration-300 hover:scale-[1.02]",
-      cardBorderMap[color]
+      cardBorderMap[color],
+      href && "cursor-pointer"
     )}>
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-zinc-300 tracking-wide uppercase">{title}</h3>
@@ -40,15 +51,20 @@ export function MetricCard({ title, value, icon: Icon, trend, color = "default" 
       </div>
       <div className="mt-auto">
         <p className="text-4xl font-extrabold text-white tracking-tight">{value}</p>
-        {trend && (
-          <p className={cn(
-            "text-xs mt-2 font-bold flex items-center gap-1 uppercase tracking-wider",
-            trend.isPositive ? "text-emerald-400" : "text-rose-400"
-          )}>
-            {trend.isPositive ? "↑" : "↓"} {trend.value}
-          </p>
+        {subStat && (
+          <div className="flex items-center gap-1.5 mt-2">
+            <span className={cn("text-sm font-bold", subStatColorMap[subStat.color ?? "zinc"])}>
+              {subStat.value}
+            </span>
+            <span className="text-xs text-zinc-500 font-medium">{subStat.label}</span>
+          </div>
         )}
       </div>
     </div>
   );
+
+  if (href) {
+    return <Link href={href} className="block h-full">{inner}</Link>;
+  }
+  return inner;
 }

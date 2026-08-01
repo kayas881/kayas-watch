@@ -1,6 +1,12 @@
 import { prisma } from "./prisma";
 
-export async function handleMonitorStatusChange(monitorIdOrKumaId: string | number, status: "UP" | "DOWN", summary: string) {
+export async function handleMonitorStatusChange(
+  monitorIdOrKumaId: string | number,
+  status: "UP" | "DOWN",
+  summary: string,
+  httpStatusCode?: number,
+  errorDetail?: string
+) {
   let monitor;
   if (typeof monitorIdOrKumaId === "number") {
     monitor = await prisma.monitor.findFirst({ where: { kumaMonitorId: monitorIdOrKumaId } });
@@ -16,7 +22,7 @@ export async function handleMonitorStatusChange(monitorIdOrKumaId: string | numb
   // Update monitor status
   await prisma.monitor.update({
     where: { id: monitor.id },
-    data: { 
+    data: {
       status,
       lastCheckTime: new Date()
     }
@@ -37,11 +43,20 @@ export async function handleMonitorStatusChange(monitorIdOrKumaId: string | numb
           status: "OPEN",
           severity: "HIGH",
           summary,
+          httpStatusCode: httpStatusCode ?? null,
+          errorDetail: errorDetail ?? null,
         }
       });
       console.log(`Created new incident: ${newIncident.id}`);
-      
-      // TODO: triggerNotifications(newIncident); (Deferred)
+    } else {
+      // Update error detail on existing open incident so it stays current
+      await prisma.incident.update({
+        where: { id: existingIncident.id },
+        data: {
+          httpStatusCode: httpStatusCode ?? existingIncident.httpStatusCode,
+          errorDetail: errorDetail ?? existingIncident.errorDetail,
+        }
+      });
     }
   } else if (status === "UP") {
     if (existingIncident) {
@@ -50,7 +65,7 @@ export async function handleMonitorStatusChange(monitorIdOrKumaId: string | numb
         data: {
           status: "RESOLVED",
           resolvedAt: new Date(),
-          summary: `${existingIncident.summary} - RESOLVED: ${summary}`
+          summary: `${existingIncident.summary} — RESOLVED: ${summary}`
         }
       });
       console.log(`Resolved incident: ${existingIncident.id}`);

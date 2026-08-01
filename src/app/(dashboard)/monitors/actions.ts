@@ -162,18 +162,38 @@ export async function refreshAllMonitorsHealth() {
         const res = await fetch(m.url, {
           method: "GET",
           signal: controller.signal,
-          headers: { "User-Agent": "kayas-Watch-Checker/1.0" }
+          headers: { "User-Agent": "Saral-Watch-Checker/1.0" }
         });
         clearTimeout(timeoutId);
 
         const isUp = res.ok;
         const newStatus = isUp ? "UP" : "DOWN";
-        const msg = isUp ? `HTTP ${res.status} OK` : `HTTP ${res.status} Error`;
+        const summary = isUp
+          ? `HTTP ${res.status} OK`
+          : `HTTP ${res.status} — ${res.statusText || "Server Error"}`;
+        const errorDetail = isUp
+          ? undefined
+          : `${res.statusText || "Server Error"} (HTTP ${res.status})`;
 
-        await handleMonitorStatusChange(m.kumaMonitorId || m.id, newStatus, msg);
+        await handleMonitorStatusChange(
+          m.kumaMonitorId || m.id,
+          newStatus,
+          summary,
+          isUp ? undefined : res.status,
+          errorDetail
+        );
       } catch (err: any) {
-        const msg = err.message || "Connection timeout / failed";
-        await handleMonitorStatusChange(m.kumaMonitorId || m.id, "DOWN", msg);
+        const isTimeout = err.name === "AbortError";
+        const detail = isTimeout
+          ? "Connection timed out (no response within 6s)"
+          : (err.message || "Network / DNS failure");
+        await handleMonitorStatusChange(
+          m.kumaMonitorId || m.id,
+          "DOWN",
+          detail,
+          0, // 0 = timeout / no HTTP response
+          detail
+        );
       }
     })
   );
@@ -184,3 +204,4 @@ export async function refreshAllMonitorsHealth() {
   revalidatePath("/");
   return monitors.length;
 }
+
