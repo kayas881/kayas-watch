@@ -149,52 +149,100 @@ export async function deleteMonitor(id: string) {
 
 import { handleMonitorStatusChange } from "@/lib/incidents";
 
+/**
+ * Parse Uptime Kuma's Prometheus /metrics endpoint.
+ * Returns a map of URL → { status: "UP"|"DOWN", responseTime: number }
+ */
+function parseKumaMetrics(raw: string): Map<string, { status: "UP" | "DOWN"; responseTime: number }> {
+  const result = new Map<string, { status: "UP" | "DOWN"; responseTime: number }>();
+
+  // Regex to extract monitor_status lines:
+  // monitor_status{...,monitor_url="<url>",...} <value>
+  const statusRegex = /monitor_status\{[^}]*monitor_url="([^"]+)"[^}]*\}\s+(\d+)/g;
+  const rtRegex     = /monitor_response_time\{[^}]*monitor_url="([^"]+)"[^}]*\}\s+([\d.-]+)/g;
+
+  let m;
+  // First pass: statuses
+  while ((m = statusRegex.exec(raw)) !== null) {
+    const url    = m[1];
+    const value  = parseInt(m[2], 10);
+    const status = value === 1 ? "UP" : "DOWN";
+    result.set(url, { status, responseTime: -1 });
+  }
+  // Second pass: response times (merge into same map)
+  while ((m = rtRegex.exec(raw)) !== null) {
+    const url = m[1];
+    const rt  = parseFloat(m[2]);
+    const existing = result.get(url);
+    if (existing) existing.responseTime = rt;
+  }
+
+  return result;
+}
+
 export async function refreshAllMonitorsHealth() {
-  const monitors = await prisma.monitor.findMany({
-    where: { isActive: true }
+  const kumaUrl      = process.env.UPTIME_KUMA_URL;
+  const kumaUser     = process.env.UPTIME_KUMA_USER;
+  const kumaPassword = process.env.UPTIME_KUMA_PASSWORD;
+
+  if (!kumaUrl || !kumaUser || !kumaPassword) {
+    throw new Error("Uptime Kuma env vars not configured");
+  }
+
+  // Fetch live statuses from Kuma's Prometheus metrics (runs on Render, checks from cloud)
+  const metricsRes = await fetch(`${kumaUrl}/metrics`, {
+    headers: {
+      Authorization: "Basic " + Buffer.from(`${kumaUser}:${kumaPassword}`).toString("base64"),
+    },
+    // Force fresh fetch, no Next.js cache
+    cache: "no-store",
   });
 
+  if (!metricsRes.ok) {
+    throw new Error(`Kuma metrics endpoint returned ${metricsRes.status}`);
+  }
+
+  const metricsText = await metricsRes.text();
+  const kumaStatuses = parseKumaMetrics(metricsText);
+
+  // Load all active monitors from our DB
+  const monitors = await prisma.monitor.findMany({
+    where: { isActive: true },
+  });
+
+  let synced = 0;
   await Promise.allSettled(
     monitors.map(async (m) => {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch(m.url, {
-          method: "GET",
-          signal: controller.signal,
-          headers: { "User-Agent": "Saral-Watch-Checker/1.0" }
-        });
-        clearTimeout(timeoutId);
+      // Match by normalized URL (trailing slash insensitive)
+      const normalize = (u: string) => u.replace(/\/$/, "").toLowerCase();
+      const kumaEntry =
+        kumaStatuses.get(m.url) ??
+        kumaStatuses.get(m.url.replace(/\/$/, "") + "/") ??
+        [...kumaStatuses.entries()].find(([k]) => normalize(k) === normalize(m.url))?.[1];
 
-        const isUp = res.ok;
-        const newStatus = isUp ? "UP" : "DOWN";
-        const summary = isUp
-          ? `HTTP ${res.status} OK`
-          : `HTTP ${res.status} — ${res.statusText || "Server Error"}`;
-        const errorDetail = isUp
-          ? undefined
-          : `${res.statusText || "Server Error"} (HTTP ${res.status})`;
-
-        await handleMonitorStatusChange(
-          m.kumaMonitorId || m.id,
-          newStatus,
-          summary,
-          isUp ? undefined : res.status,
-          errorDetail
-        );
-      } catch (err: any) {
-        const isTimeout = err.name === "AbortError";
-        const detail = isTimeout
-          ? "Connection timed out (no response within 6s)"
-          : (err.message || "Network / DNS failure");
-        await handleMonitorStatusChange(
-          m.kumaMonitorId || m.id,
-          "DOWN",
-          detail,
-          0, // 0 = timeout / no HTTP response
-          detail
-        );
+      if (!kumaEntry) {
+        // Monitor not found in Kuma metrics — skip
+        return;
       }
+
+      const { status, responseTime } = kumaEntry;
+      const summary = status === "UP"
+        ? `Kuma: UP (${responseTime > 0 ? responseTime + "ms" : "checked"})`
+        : `Kuma: DOWN (${responseTime === -1 ? "no response" : responseTime + "ms"})`;
+      const errorDetail = status === "DOWN"
+        ? (responseTime === -1
+            ? "No response from server (Uptime Kuma: DOWN)"
+            : `Server error — response time: ${responseTime}ms`)
+        : undefined;
+
+      await handleMonitorStatusChange(
+        m.kumaMonitorId ?? m.id,
+        status,
+        summary,
+        status === "DOWN" ? (responseTime === -1 ? 0 : undefined) : undefined,
+        errorDetail
+      );
+      synced++;
     })
   );
 
@@ -202,6 +250,6 @@ export async function refreshAllMonitorsHealth() {
   revalidatePath("/websites");
   revalidatePath("/incidents");
   revalidatePath("/");
-  return monitors.length;
+  return synced;
 }
 
