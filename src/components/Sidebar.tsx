@@ -27,8 +27,8 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <div className="w-64 border-r border-zinc-800 bg-zinc-950/50 backdrop-blur-xl h-[calc(100vh-4rem)] sticky top-16 hidden md:flex flex-col">
-      <nav className="flex-1 space-y-1 p-4">
+    <div className="w-64 border-r border-zinc-800 bg-zinc-950/50 backdrop-blur-xl h-full hidden md:flex flex-col">
+      <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
         {navigation.map((item) => {
           const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
           return (

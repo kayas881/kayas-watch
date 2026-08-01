@@ -17,8 +17,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-background)] flex flex-col">
-      <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-50">
+    <div className="h-screen overflow-hidden bg-[var(--color-background)] flex flex-col">
+      <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-xl shrink-0 z-50">
         <div className="w-full px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-600/30 to-violet-900/40 border border-purple-500/30 flex items-center justify-center glow-primary">
