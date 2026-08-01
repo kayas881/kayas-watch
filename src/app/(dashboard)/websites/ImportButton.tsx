@@ -33,7 +33,30 @@ export function ImportButton() {
         className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-violet-600/10 hover:bg-violet-600/20 text-violet-400 border border-violet-600/20 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
       >
         {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-        {syncing ? "Creating Monitors..." : "Create All Monitors"}
+        {syncing ? "Creating..." : "Create All Monitors"}
+      </button>
+
+      <button
+        onClick={async () => {
+          if (!confirm("This will recreate all monitors in Kuma. Only do this if Kuma was wiped.")) return;
+          setSyncing(true);
+          try {
+            const { forceResyncWebsitesToMonitors } = await import("./actions");
+            const count = await forceResyncWebsitesToMonitors();
+            alert(`Successfully force-recreated ${count} monitors in Kuma!`);
+            router.refresh();
+          } catch (err: any) {
+            alert("Force sync error: " + (err.message || "Failed"));
+          } finally {
+            setSyncing(false);
+          }
+        }}
+        disabled={syncing}
+        title="Force reset and recreate all monitors if Kuma was wiped"
+        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 border border-red-600/20 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+      >
+        <RefreshCw className="w-4 h-4" />
+        Force Reset Kuma
       </button>
 
       <button

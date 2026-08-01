@@ -255,3 +255,15 @@ export async function syncWebsitesToMonitors() {
 
   return syncedCount;
 }
+
+export async function forceResyncWebsitesToMonitors() {
+  await requireAdmin();
+
+  // Reset all kumaMonitorIds to null first
+  await prisma.monitor.updateMany({
+    data: { kumaMonitorId: null }
+  });
+
+  // Then run the normal sync
+  return await syncWebsitesToMonitors();
+}
