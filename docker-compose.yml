@@ -23,6 +23,25 @@ services:
       - "3001:3001"
     restart: unless-stopped
 
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kayas_watch_web
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://kayas:kayas_password@db:5432/kayas_watch?schema=public
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=my-super-secret-key-change-me-in-production
+      - UPTIME_KUMA_URL=http://uptime-kuma:3001
+      - UPTIME_KUMA_USER=admin
+      - UPTIME_KUMA_PASSWORD=admin
+    depends_on:
+      - db
+      - uptime-kuma
+    restart: unless-stopped
+
 volumes:
   pgdata:
   uptime-kuma-data:
