@@ -156,28 +156,71 @@ import { handleMonitorStatusChange } from "@/lib/incidents";
 function parseKumaMetrics(raw: string): Map<string, { status: "UP" | "DOWN"; responseTime: number }> {
   const result = new Map<string, { status: "UP" | "DOWN"; responseTime: number }>();
 
-  // Regex to extract monitor_status lines:
-  // monitor_status{...,monitor_url="<url>",...} <value>
   const statusRegex = /monitor_status\{[^}]*monitor_url="([^"]+)"[^}]*\}\s+(\d+)/g;
   const rtRegex     = /monitor_response_time\{[^}]*monitor_url="([^"]+)"[^}]*\}\s+([\d.-]+)/g;
 
   let m;
-  // First pass: statuses
   while ((m = statusRegex.exec(raw)) !== null) {
-    const url    = m[1];
-    const value  = parseInt(m[2], 10);
-    const status = value === 1 ? "UP" : "DOWN";
-    result.set(url, { status, responseTime: -1 });
+    const url   = m[1];
+    const value = parseInt(m[2], 10);
+    result.set(url, { status: value === 1 ? "UP" : "DOWN", responseTime: -1 });
   }
-  // Second pass: response times (merge into same map)
   while ((m = rtRegex.exec(raw)) !== null) {
-    const url = m[1];
-    const rt  = parseFloat(m[2]);
+    const url      = m[1];
     const existing = result.get(url);
-    if (existing) existing.responseTime = rt;
+    if (existing) existing.responseTime = parseFloat(m[2]);
   }
-
   return result;
+}
+
+/**
+ * For a URL that Kuma says is DOWN, do a real HTTP probe to get the exact error code.
+ * Returns { httpStatusCode, errorDetail }.
+ */
+async function probeDownSite(url: string): Promise<{ httpStatusCode: number; errorDetail: string }> {
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 15000); // 15s — generous for slow servers
+    const res = await fetch(url, {
+      method: "GET",
+      signal: controller.signal,
+      redirect: "follow",
+      headers: { "User-Agent": "Saral-Watch-Checker/1.0" },
+    });
+    clearTimeout(tid);
+
+    const statusText = res.statusText || httpStatusLabel(res.status);
+    return {
+      httpStatusCode: res.status,
+      errorDetail: `HTTP ${res.status} ${statusText}`,
+    };
+  } catch (err: any) {
+    const isTimeout = err.name === "AbortError";
+    const isCert    = err.message?.includes("certificate") || err.message?.includes("SSL");
+    const isDns     = err.message?.includes("ENOTFOUND") || err.message?.includes("getaddrinfo");
+    const isRefused = err.message?.includes("ECONNREFUSED");
+
+    const detail = isTimeout  ? "Connection timed out — server not responding"
+                 : isCert     ? "SSL/TLS certificate error"
+                 : isDns      ? "DNS resolution failed — domain not found"
+                 : isRefused  ? "Connection refused by server"
+                 : (err.message || "Network failure");
+
+    return { httpStatusCode: 0, errorDetail: detail };
+  }
+}
+
+function httpStatusLabel(code: number): string {
+  const labels: Record<number, string> = {
+    400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
+    404: "Not Found", 405: "Method Not Allowed", 408: "Request Timeout",
+    429: "Too Many Requests", 500: "Internal Server Error",
+    501: "Not Implemented", 502: "Bad Gateway", 503: "Service Unavailable",
+    504: "Gateway Timeout", 508: "Loop Detected", 509: "Bandwidth Limit Exceeded",
+    520: "Unknown Error", 521: "Web Server Is Down", 522: "Connection Timed Out",
+    524: "A Timeout Occurred",
+  };
+  return labels[code] || "Server Error";
 }
 
 export async function refreshAllMonitorsHealth() {
@@ -189,12 +232,11 @@ export async function refreshAllMonitorsHealth() {
     throw new Error("Uptime Kuma env vars not configured");
   }
 
-  // Fetch live statuses from Kuma's Prometheus metrics (runs on Render, checks from cloud)
+  // Step 1: Get Kuma's cloud-verified statuses (fast, authoritative)
   const metricsRes = await fetch(`${kumaUrl}/metrics`, {
     headers: {
       Authorization: "Basic " + Buffer.from(`${kumaUser}:${kumaPassword}`).toString("base64"),
     },
-    // Force fresh fetch, no Next.js cache
     cache: "no-store",
   });
 
@@ -202,45 +244,65 @@ export async function refreshAllMonitorsHealth() {
     throw new Error(`Kuma metrics endpoint returned ${metricsRes.status}`);
   }
 
-  const metricsText = await metricsRes.text();
-  const kumaStatuses = parseKumaMetrics(metricsText);
+  const kumaStatuses = parseKumaMetrics(await metricsRes.text());
 
-  // Load all active monitors from our DB
-  const monitors = await prisma.monitor.findMany({
-    where: { isActive: true },
+  // Step 2: Load all active monitors from our DB
+  const monitors = await prisma.monitor.findMany({ where: { isActive: true } });
+
+  const normalize = (u: string) => u.replace(/\/$/, "").toLowerCase();
+
+  const findKumaEntry = (url: string) =>
+    kumaStatuses.get(url) ??
+    kumaStatuses.get(url.replace(/\/$/, "") + "/") ??
+    [...kumaStatuses.entries()].find(([k]) => normalize(k) === normalize(url))?.[1];
+
+  // Step 3: For DOWN sites only, probe directly to get real HTTP code
+  //         (only ~10 sites — fast and targeted)
+  const downMonitors = monitors.filter((m) => {
+    const entry = findKumaEntry(m.url);
+    return entry?.status === "DOWN";
   });
 
+  const probeResults = new Map<string, { httpStatusCode: number; errorDetail: string }>();
+  await Promise.allSettled(
+    downMonitors.map(async (m) => {
+      const result = await probeDownSite(m.url);
+      probeResults.set(m.url, result);
+    })
+  );
+
+  // Step 4: Sync all monitors using Kuma status + real error detail for DOWN ones
   let synced = 0;
   await Promise.allSettled(
     monitors.map(async (m) => {
-      // Match by normalized URL (trailing slash insensitive)
-      const normalize = (u: string) => u.replace(/\/$/, "").toLowerCase();
-      const kumaEntry =
-        kumaStatuses.get(m.url) ??
-        kumaStatuses.get(m.url.replace(/\/$/, "") + "/") ??
-        [...kumaStatuses.entries()].find(([k]) => normalize(k) === normalize(m.url))?.[1];
+      const kumaEntry = findKumaEntry(m.url);
+      if (!kumaEntry) return; // not in Kuma yet
 
-      if (!kumaEntry) {
-        // Monitor not found in Kuma metrics — skip
-        return;
+      const { status } = kumaEntry;
+
+      let httpStatusCode: number | undefined;
+      let errorDetail: string | undefined;
+      let summary: string;
+
+      if (status === "DOWN") {
+        const probe = probeResults.get(m.url);
+        httpStatusCode = probe?.httpStatusCode;
+        errorDetail    = probe?.errorDetail;
+        summary        = probe
+          ? (probe.httpStatusCode === 0
+              ? probe.errorDetail
+              : `HTTP ${probe.httpStatusCode} — ${probe.errorDetail}`)
+          : "Kuma: DOWN";
+      } else {
+        summary = "Kuma: UP";
       }
-
-      const { status, responseTime } = kumaEntry;
-      const summary = status === "UP"
-        ? `Kuma: UP (${responseTime > 0 ? responseTime + "ms" : "checked"})`
-        : `Kuma: DOWN (${responseTime === -1 ? "no response" : responseTime + "ms"})`;
-      const errorDetail = status === "DOWN"
-        ? (responseTime === -1
-            ? "No response from server (Uptime Kuma: DOWN)"
-            : `Server error — response time: ${responseTime}ms`)
-        : undefined;
 
       await handleMonitorStatusChange(
         m.kumaMonitorId ?? m.id,
         status,
         summary,
-        status === "DOWN" ? (responseTime === -1 ? 0 : undefined) : undefined,
-        errorDetail
+        status === "DOWN" ? httpStatusCode : undefined,
+        status === "DOWN" ? errorDetail : undefined
       );
       synced++;
     })
@@ -252,4 +314,6 @@ export async function refreshAllMonitorsHealth() {
   revalidatePath("/");
   return synced;
 }
+
+
 
