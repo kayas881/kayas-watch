@@ -287,58 +287,8 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Bottom panels: Client Impact + Recent Resolution */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-
-        {/* === CLIENT IMPACT GRID === */}
-        <div className="glass rounded-2xl border border-purple-500/20 overflow-hidden flex flex-col">
-          <div className="p-5 border-b border-purple-500/10 flex items-center justify-between">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-purple-400" />
-              Client Health Overview
-            </h3>
-            <Link href="/clients" className="text-xs text-purple-400 hover:text-purple-300 font-semibold">
-              View all →
-            </Link>
-          </div>
-          <div className="flex-1 p-5">
-            {clientHealth.length === 0 ? (
-              <p className="text-zinc-500 text-sm text-center py-6">No clients added yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {/* Affected clients first */}
-                {criticalClients.map((c) => (
-                  <Link key={c.id} href={`/clients/${c.id}`} className="flex items-center justify-between p-3 rounded-xl bg-rose-500/5 border border-rose-500/15 hover:bg-rose-500/10 transition-colors group">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-2 h-2 rounded-full bg-rose-500 flex-shrink-0 animate-pulse" />
-                      <span className="font-semibold text-white text-sm truncate">{c.name}</span>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className="text-xs font-bold text-rose-400">{c.down} down</span>
-                      <span className="text-xs text-zinc-500">{c.up}/{c.total} up</span>
-                      <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300" />
-                    </div>
-                  </Link>
-                ))}
-                {/* Healthy clients */}
-                {healthyClients.map((c) => (
-                  <Link key={c.id} href={`/clients/${c.id}`} className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/30 border border-zinc-800/50 hover:bg-zinc-800/40 transition-colors group">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
-                      <span className="font-medium text-zinc-300 text-sm truncate">{c.name}</span>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <span className="text-xs font-semibold text-emerald-400">{c.total} up</span>
-                      <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-300" />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* === RECENTLY RESOLVED === */}
+      {/* Bottom panels: Recent Resolution */}
+      <div className="grid grid-cols-1 gap-6">
         <div className="glass rounded-2xl border border-zinc-800/50 overflow-hidden flex flex-col">
           <div className="p-5 border-b border-zinc-800/50 flex items-center justify-between">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
