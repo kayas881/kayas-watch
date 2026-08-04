@@ -29,10 +29,10 @@ services:
       dockerfile: Dockerfile
     container_name: kayas_watch_web
     ports:
-      - "3000:3000"
+      - "80:3000"
     environment:
       - DATABASE_URL=postgresql://kayas:kayas_password@db:5432/kayas_watch?schema=public
-      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_URL=http://34.56.10.214
       - NEXTAUTH_SECRET=my-super-secret-key-change-me-in-production
       - UPTIME_KUMA_URL=http://uptime-kuma:3001
       - UPTIME_KUMA_USER=admin
