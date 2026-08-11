@@ -54,6 +54,7 @@ export default async function DashboardPage() {
     totalMonitors,
     sitesUp,
     sitesDown,
+    sitesCompromised,
     activeIncidents,
     openIncidents,
     recentResolved,
@@ -63,6 +64,7 @@ export default async function DashboardPage() {
     prisma.monitor.count(),
     prisma.monitor.count({ where: { status: "UP" } }),
     prisma.monitor.count({ where: { status: "DOWN" } }),
+    prisma.monitor.count({ where: { status: "COMPROMISED" } }),
     prisma.incident.count({ where: { status: "OPEN" } }),
 
     // Full open incidents with error detail — the main outage panel
@@ -111,7 +113,7 @@ export default async function DashboardPage() {
   // Build per-client health summary
   const clientHealth = allClientsWithHealth.map((client) => {
     const allMonitors = client.websites.flatMap((w) => w.monitors);
-    const down = allMonitors.filter((m) => m.status === "DOWN").length;
+    const down = allMonitors.filter((m) => m.status === "DOWN" || m.status === "COMPROMISED").length;
     const total = allMonitors.length;
     return { id: client.id, name: client.companyName, total, down, up: total - down };
   }).sort((a, b) => b.down - a.down); // Most affected first
@@ -131,11 +133,13 @@ export default async function DashboardPage() {
             </span>
             <span className={cn(
               "text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider",
-              sitesDown === 0
+              sitesCompromised > 0
+                ? "bg-red-500/10 text-red-400 border border-red-500/20"
+                : sitesDown === 0
                 ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                 : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
             )}>
-              {sitesDown === 0 ? "● All Systems Operational" : `● ${sitesDown} Sites Down`}
+              {sitesCompromised > 0 ? `🚨 ${sitesCompromised} SITES COMPROMISED` : sitesDown === 0 ? "● All Systems Operational" : `● ${sitesDown} Sites Down`}
             </span>
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Dashboard Overview</h1>
@@ -170,7 +174,9 @@ export default async function DashboardPage() {
           icon={Wifi}
           color="green"
           href="/monitors"
-          subStat={sitesDown > 0
+          subStat={sitesCompromised > 0 
+            ? { value: `${sitesCompromised} COMPROMISED`, label: "critical attention needed", color: "red" } 
+            : sitesDown > 0
             ? { value: `${sitesDown} DOWN`, label: "need attention", color: "red" }
             : { value: "All clear", label: "no issues", color: "green" }
           }

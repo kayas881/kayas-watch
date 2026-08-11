@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { syncMonitorToKuma } from "@/lib/kuma";
 import { withAuth } from "@/lib/auth";
 import { z } from "zod";
 
@@ -43,31 +42,16 @@ export const POST = withAuth(async (req: Request) => {
       return NextResponse.json({ error: "Website not found" }, { status: 404 });
     }
 
-    // Provision in Uptime Kuma FIRST to avoid hanging local state if Kuma is unreachable
-    let kumaId: number;
-    try {
-      kumaId = await syncMonitorToKuma({
-        name: parsed.data.name,
-        type: parsed.data.type,
-        url: parsed.data.url,
-        intervalSeconds: parsed.data.intervalSeconds,
-        retryPolicy: parsed.data.retryPolicy
-      });
-    } catch (kumaError: any) {
-      console.error("Failed to sync with Kuma", kumaError);
-      return NextResponse.json({ error: "Failed to provision monitor in Uptime Kuma", details: kumaError.message }, { status: 502 });
-    }
-
-    // Create in local DB
+    // Create in local DB directly (Vercel cron will health check it soon)
     const monitor = await prisma.monitor.create({
       data: {
         websiteId: parsed.data.websiteId,
-        kumaMonitorId: kumaId,
         name: parsed.data.name,
         type: parsed.data.type,
         url: parsed.data.url,
         intervalSeconds: parsed.data.intervalSeconds,
         retryPolicy: parsed.data.retryPolicy,
+        status: "UP"
       },
     });
 

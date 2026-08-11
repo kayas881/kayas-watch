@@ -3,10 +3,9 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth-utils";
 
 // --- Websites ---
-
-import { requireAdmin } from "@/lib/auth-utils";
 
 export async function createWebsite(formData: FormData) {
   await requireAdmin();
@@ -71,8 +70,6 @@ export async function deleteWebsite(id: string) {
   redirect("/websites");
 }
 
-import { syncMonitorToKuma, bulkSyncMonitorsToKuma } from "@/lib/kuma";
-
 export async function bulkImportWebsites(rows: { category?: string; url: string; notes?: string }[], createMonitors: boolean) {
   await requireAdmin();
 
@@ -92,8 +89,6 @@ export async function bulkImportWebsites(rows: { category?: string; url: string;
       const domain = parsedUrl.hostname.replace(/^www\./i, "");
 
       // Upsert Client based on Domain name
-      // Note: UPSERT requires a unique field. We don't have a unique field for companyName, 
-      // so we use findFirst and create
       let client = await prisma.client.findFirst({
         where: { primaryDomain: domain }
       });
@@ -135,20 +130,6 @@ export async function bulkImportWebsites(rows: { category?: string; url: string;
         });
 
         if (!monitorExists) {
-          let kumaMonitorId: number | null = null;
-          try {
-            kumaMonitorId = await syncMonitorToKuma({
-              name: domain,
-              type: "http",
-              url: finalUrl,
-              intervalSeconds: 60,
-              retryPolicy: 3
-            });
-            await new Promise(r => setTimeout(r, 200));
-          } catch (kumaErr) {
-            console.error(`Failed to sync monitor to Kuma for ${finalUrl}:`, kumaErr);
-          }
-
           try {
             await prisma.monitor.create({
               data: {
@@ -158,7 +139,6 @@ export async function bulkImportWebsites(rows: { category?: string; url: string;
                 type: "http",
                 intervalSeconds: 60,
                 retryPolicy: 3,
-                kumaMonitorId,
                 status: "UP",
                 isActive: true
               }
@@ -190,61 +170,30 @@ export async function syncWebsitesToMonitors() {
     include: { monitors: true }
   });
 
-  const itemsToSync: { websiteId: string; existingMonitorId?: string; name: string; type: string; url: string; intervalSeconds: number; retryPolicy: number }[] = [];
+  let syncedCount = 0;
 
   for (const website of websites) {
     const existingMonitor = website.monitors[0];
-    if (existingMonitor && existingMonitor.kumaMonitorId !== null) {
+    if (existingMonitor) {
       continue;
     }
-    itemsToSync.push({
-      websiteId: website.id,
-      existingMonitorId: existingMonitor?.id,
-      name: website.name,
-      type: "http",
-      url: website.url,
-      intervalSeconds: 60,
-      retryPolicy: 3
-    });
-  }
-
-  if (itemsToSync.length === 0) return 0;
-
-  const kumaResults = await bulkSyncMonitorsToKuma(itemsToSync);
-  let syncedCount = 0;
-
-  for (let i = 0; i < itemsToSync.length; i++) {
-    const item = itemsToSync[i];
-    const kumaRes = kumaResults[i];
-    const kumaMonitorId = kumaRes?.kumaMonitorId ?? null;
-
-    if (item.existingMonitorId) {
-      if (kumaMonitorId !== null) {
-        await prisma.monitor.update({
-          where: { id: item.existingMonitorId },
-          data: { kumaMonitorId }
-        });
-        syncedCount++;
-      }
-    } else {
-      try {
-        await prisma.monitor.create({
-          data: {
-            name: item.name,
-            url: item.url,
-            websiteId: item.websiteId,
-            type: item.type,
-            intervalSeconds: item.intervalSeconds,
-            retryPolicy: item.retryPolicy,
-            kumaMonitorId,
-            status: "UP",
-            isActive: true
-          }
-        });
-        syncedCount++;
-      } catch (dbErr) {
-        console.error(`Failed to create DB monitor for ${item.url}:`, dbErr);
-      }
+    
+    try {
+      await prisma.monitor.create({
+        data: {
+          name: website.name,
+          url: website.url,
+          websiteId: website.id,
+          type: "http",
+          intervalSeconds: 60,
+          retryPolicy: 3,
+          status: "UP",
+          isActive: true
+        }
+      });
+      syncedCount++;
+    } catch (dbErr) {
+      console.error(`Failed to create DB monitor for ${website.url}:`, dbErr);
     }
   }
 
@@ -254,16 +203,4 @@ export async function syncWebsitesToMonitors() {
   revalidatePath("/");
 
   return syncedCount;
-}
-
-export async function forceResyncWebsitesToMonitors() {
-  await requireAdmin();
-
-  // Reset all kumaMonitorIds to null first
-  await prisma.monitor.updateMany({
-    data: { kumaMonitorId: null }
-  });
-
-  // Then run the normal sync
-  return await syncWebsitesToMonitors();
 }

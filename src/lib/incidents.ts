@@ -1,25 +1,21 @@
 import { prisma } from "./prisma";
 
 export async function handleMonitorStatusChange(
-  monitorIdOrKumaId: string | number,
-  status: "UP" | "DOWN",
+  monitorId: string,
+  status: "UP" | "DOWN" | "COMPROMISED",
   summary: string,
   httpStatusCode?: number,
   errorDetail?: string
 ) {
-  let monitor;
-  if (typeof monitorIdOrKumaId === "number") {
-    monitor = await prisma.monitor.findFirst({ where: { kumaMonitorId: monitorIdOrKumaId } });
-  } else {
-    monitor = await prisma.monitor.findUnique({ where: { id: String(monitorIdOrKumaId) } });
-  }
+  const monitor = await prisma.monitor.findUnique({ where: { id: monitorId } });
 
   if (!monitor) {
-    console.warn(`No local monitor found for ID ${monitorIdOrKumaId}`);
+    console.warn(`No local monitor found for ID ${monitorId}`);
     return;
   }
 
-  // Update monitor status
+  // Update monitor status is now handled in health-checker.ts, but we can do it here just in case.
+  // Actually, health-checker does it. Let's still do it to be safe if called from elsewhere.
   await prisma.monitor.update({
     where: { id: monitor.id },
     data: {
@@ -35,13 +31,15 @@ export async function handleMonitorStatusChange(
     }
   });
 
-  if (status === "DOWN") {
+  if (status === "DOWN" || status === "COMPROMISED") {
+    const severity = status === "COMPROMISED" ? "CRITICAL" : "HIGH";
+    
     if (!existingIncident) {
       const newIncident = await prisma.incident.create({
         data: {
           monitorId: monitor.id,
           status: "OPEN",
-          severity: "HIGH",
+          severity,
           summary,
           httpStatusCode: httpStatusCode ?? null,
           errorDetail: errorDetail ?? null,
@@ -50,9 +48,12 @@ export async function handleMonitorStatusChange(
       console.log(`Created new incident: ${newIncident.id}`);
     } else {
       // Update error detail on existing open incident so it stays current
+      // Upgrade severity to CRITICAL if it became compromised
       await prisma.incident.update({
         where: { id: existingIncident.id },
         data: {
+          severity: existingIncident.severity === "CRITICAL" ? "CRITICAL" : severity,
+          summary: status === "COMPROMISED" && !existingIncident.summary?.includes("SECURITY") ? summary : existingIncident.summary,
           httpStatusCode: httpStatusCode ?? existingIncident.httpStatusCode,
           errorDetail: errorDetail ?? existingIncident.errorDetail,
         }

@@ -91,14 +91,14 @@ model Website {
 model Monitor {
   id              String   @id @default(uuid())
   websiteId       String
-  kumaMonitorId   Int?     // References the ID in Uptime Kuma
+  responseTimeMs  Int?
   name            String
   type            String   @default("HTTP") // HTTP, PING, PORT, etc.
   url             String
   intervalSeconds Int      @default(60)
   retryPolicy     Int      @default(3)
   isActive        Boolean  @default(true)
-  status          String   @default("UP") // UP, DOWN, DEGRADED, PAUSED
+  status          String   @default("UP") // UP, DOWN, DEGRADED, PAUSED, COMPROMISED
   lastCheckTime   DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
