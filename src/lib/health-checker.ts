@@ -10,6 +10,10 @@ const SUSPICIOUS_TLDS = [
   ".xyz", ".top", ".buzz", ".click", ".loan", ".club", ".vip", ".win"
 ];
 
+/**
+ * Phase 1: Quick health check — just verify the site responds.
+ * Uses a HEAD-then-GET strategy with a short timeout.
+ */
 export async function checkSiteHealth(url: string): Promise<{ 
   status: "UP" | "DOWN" | "COMPROMISED"; 
   httpStatusCode?: number; 
@@ -20,14 +24,15 @@ export async function checkSiteHealth(url: string): Promise<{
   
   try {
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const tid = setTimeout(() => controller.abort(), 5000); // 5s timeout (was 10s)
 
     const originalUrlObj = new URL(url);
 
+    // Phase 1: HEAD request — fast, no body download
     const res = await fetch(url, {
-      method: "GET",
+      method: "HEAD",
       signal: controller.signal,
-      redirect: "follow", // Let fetch follow redirects so we can check the final URL
+      redirect: "follow",
       headers: { "User-Agent": "Saral-Watch-Checker/1.0" },
     });
     
@@ -37,8 +42,6 @@ export async function checkSiteHealth(url: string): Promise<{
     // 1. Check for Redirect Hijack
     const finalUrlObj = new URL(res.url);
     if (finalUrlObj.hostname.replace(/^www\./, '') !== originalUrlObj.hostname.replace(/^www\./, '')) {
-      // It redirected to a different domain. This might be a hack if the domain is completely different.
-      // Let's refine it: only flag if it redirects to a completely different second-level domain.
       const originalParts = originalUrlObj.hostname.split('.');
       const finalParts = finalUrlObj.hostname.split('.');
       const originalDomain = originalParts.length > 2 ? originalParts.slice(-2).join('.') : originalParts.join('.');
@@ -63,45 +66,8 @@ export async function checkSiteHealth(url: string): Promise<{
       };
     }
 
-    // Read the first 50KB of the body to check for keywords/scripts
-    const text = await res.text();
-    const snippet = text.substring(0, 50000).toLowerCase();
-
-    // 2. Content Keyword Scanning
-    for (const keyword of SUSPICIOUS_KEYWORDS) {
-      if (snippet.includes(keyword)) {
-        return {
-          status: "COMPROMISED",
-          httpStatusCode: res.status,
-          errorDetail: `Suspicious content detected: Found keyword "${keyword}" in page body.`,
-          responseTimeMs
-        };
-      }
-    }
-
-    // 3. Injected Script Detection
-    const scriptSrcRegex = /<script[^>]+src=["']([^"']+)["']/gi;
-    let match;
-    while ((match = scriptSrcRegex.exec(snippet)) !== null) {
-      const srcUrl = match[1];
-      if (srcUrl.startsWith("http")) {
-        try {
-          const scriptUrlObj = new URL(srcUrl);
-          const tld = "." + scriptUrlObj.hostname.split('.').pop();
-          if (SUSPICIOUS_TLDS.includes(tld)) {
-            return {
-              status: "COMPROMISED",
-              httpStatusCode: res.status,
-              errorDetail: `Injected script detected: Found script loading from suspicious domain (${scriptUrlObj.hostname}).`,
-              responseTimeMs
-            };
-          }
-        } catch (e) {
-          // ignore invalid URLs
-        }
-      }
-    }
-
+    // Site is reachable — mark UP for now.
+    // Content scanning runs separately (Phase 2) so it doesn't slow down the main check.
     return { status: "UP", httpStatusCode: res.status, responseTimeMs };
 
   } catch (err: any) {
@@ -129,6 +95,69 @@ export async function checkSiteHealth(url: string): Promise<{
   }
 }
 
+/**
+ * Phase 2: Deep content scan for hack detection.
+ * Only called on sites that are UP — downloads a small chunk of HTML.
+ */
+async function deepScanForCompromise(url: string): Promise<{
+  isCompromised: boolean;
+  detail?: string;
+}> {
+  try {
+    const controller = new AbortController();
+    const tid = setTimeout(() => controller.abort(), 5000);
+
+    const res = await fetch(url, {
+      method: "GET",
+      signal: controller.signal,
+      redirect: "follow",
+      headers: { "User-Agent": "Saral-Watch-Checker/1.0" },
+    });
+    clearTimeout(tid);
+
+    if (!res.ok) return { isCompromised: false };
+
+    const text = await res.text();
+    const snippet = text.substring(0, 50000).toLowerCase();
+
+    // Keyword scanning
+    for (const keyword of SUSPICIOUS_KEYWORDS) {
+      if (snippet.includes(keyword)) {
+        return {
+          isCompromised: true,
+          detail: `Suspicious content detected: Found keyword "${keyword}" in page body.`
+        };
+      }
+    }
+
+    // Injected script detection
+    const scriptSrcRegex = /<script[^>]+src=["']([^"']+)["']/gi;
+    let match;
+    while ((match = scriptSrcRegex.exec(snippet)) !== null) {
+      const srcUrl = match[1];
+      if (srcUrl.startsWith("http")) {
+        try {
+          const scriptUrlObj = new URL(srcUrl);
+          const tld = "." + scriptUrlObj.hostname.split('.').pop();
+          if (SUSPICIOUS_TLDS.includes(tld)) {
+            return {
+              isCompromised: true,
+              detail: `Injected script detected: Found script loading from suspicious domain (${scriptUrlObj.hostname}).`
+            };
+          }
+        } catch (e) {
+          // ignore invalid URLs
+        }
+      }
+    }
+
+    return { isCompromised: false };
+  } catch {
+    // If the deep scan fails, don't flag — the site might just be slow
+    return { isCompromised: false };
+  }
+}
+
 export function httpStatusLabel(code: number): string {
   const labels: Record<number, string> = {
     400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
@@ -142,6 +171,16 @@ export function httpStatusLabel(code: number): string {
   return labels[code] || "Server Error";
 }
 
+/**
+ * Process monitors in batches to avoid overwhelming Vercel's connection pool.
+ */
+async function processBatch<T>(items: T[], batchSize: number, fn: (item: T) => Promise<void>) {
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    await Promise.allSettled(batch.map(fn));
+  }
+}
+
 export async function checkAllMonitors() {
   const monitors = await prisma.monitor.findMany({ where: { isActive: true } });
   
@@ -150,44 +189,75 @@ export async function checkAllMonitors() {
   let down = 0;
   let compromised = 0;
 
-  await Promise.allSettled(
-    monitors.map(async (m) => {
-      const result = await checkSiteHealth(m.url);
-      
-      checked++;
-      if (result.status === "UP") up++;
-      else if (result.status === "DOWN") down++;
-      else if (result.status === "COMPROMISED") compromised++;
+  // Track which monitors passed Phase 1 (UP) for content scanning
+  const upMonitors: { id: string; url: string }[] = [];
 
-      // Update monitor DB record with new status and response time
-      // NOTE: status is updated inside checkAllMonitors because we removed the direct db update here, wait, no I update it here directly.
-      await prisma.monitor.update({
-        where: { id: m.id },
-        data: {
-          status: result.status,
-          lastCheckTime: new Date(),
-          responseTimeMs: result.responseTimeMs
-        }
-      });
+  // Phase 1: Quick health check in batches of 10
+  await processBatch(monitors, 10, async (m) => {
+    const result = await checkSiteHealth(m.url);
+    
+    checked++;
 
-      let summary = "";
-      if (result.status === "COMPROMISED") {
-        summary = `🚨 SECURITY: ${result.errorDetail}`;
-      } else if (result.status === "DOWN") {
-        summary = result.httpStatusCode === 0 ? result.errorDetail! : `HTTP ${result.httpStatusCode} — ${result.errorDetail}`;
-      } else {
-        summary = "UP";
+    // Update monitor DB record
+    await prisma.monitor.update({
+      where: { id: m.id },
+      data: {
+        status: result.status,
+        lastCheckTime: new Date(),
+        responseTimeMs: result.responseTimeMs
       }
+    });
 
+    if (result.status === "UP") {
+      up++;
+      upMonitors.push({ id: m.id, url: m.url });
+    } else if (result.status === "COMPROMISED") {
+      compromised++;
       await handleMonitorStatusChange(
         m.id,
-        result.status,
+        "COMPROMISED",
+        `🚨 SECURITY: ${result.errorDetail}`,
+        result.httpStatusCode,
+        result.errorDetail
+      );
+    } else {
+      down++;
+      const summary = result.httpStatusCode === 0 
+        ? result.errorDetail! 
+        : `HTTP ${result.httpStatusCode} — ${result.errorDetail}`;
+      await handleMonitorStatusChange(
+        m.id,
+        "DOWN",
         summary,
         result.httpStatusCode,
         result.errorDetail
       );
-    })
-  );
+    }
+  });
+
+  // Phase 2: Deep content scan on UP sites (batches of 5 — these download HTML)
+  await processBatch(upMonitors, 5, async (m) => {
+    const scan = await deepScanForCompromise(m.url);
+    if (scan.isCompromised) {
+      // Downgrade from UP to COMPROMISED
+      up--;
+      compromised++;
+      await prisma.monitor.update({
+        where: { id: m.id },
+        data: { status: "COMPROMISED" }
+      });
+      await handleMonitorStatusChange(
+        m.id,
+        "COMPROMISED",
+        `🚨 SECURITY: ${scan.detail}`,
+        undefined,
+        scan.detail
+      );
+    } else {
+      // Resolve any existing incidents since site is UP and clean
+      await handleMonitorStatusChange(m.id, "UP", "UP");
+    }
+  });
 
   return { checked, up, down, compromised };
 }
