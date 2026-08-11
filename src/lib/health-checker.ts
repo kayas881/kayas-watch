@@ -118,16 +118,31 @@ async function deepScanForCompromise(url: string): Promise<{
     if (!res.ok) return { isCompromised: false };
 
     const text = await res.text();
-    const snippet = text.substring(0, 50000).toLowerCase();
+    const rawSnippet = text.substring(0, 50000).toLowerCase();
 
-    // Keyword scanning
+    // Strip out <script>...</script> and <style>...</style> blocks before scanning
+    // These often contain false positive keywords in minified code, analytics, theme files
+    const cleanedSnippet = rawSnippet
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<!--[\s\S]*?-->/g, "");
+
+    // Keyword scanning — require 3+ DIFFERENT keyword matches to flag as compromised
+    // A single match is almost always a false positive (e.g., word in an ad tag or template)
+    const foundKeywords: string[] = [];
     for (const keyword of SUSPICIOUS_KEYWORDS) {
-      if (snippet.includes(keyword)) {
-        return {
-          isCompromised: true,
-          detail: `Suspicious content detected: Found keyword "${keyword}" in page body.`
-        };
+      // Use word boundary matching to avoid partial matches
+      const regex = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "i");
+      if (regex.test(cleanedSnippet)) {
+        foundKeywords.push(keyword);
       }
+    }
+
+    if (foundKeywords.length >= 3) {
+      return {
+        isCompromised: true,
+        detail: `Suspicious content detected: Found keywords [${foundKeywords.join(", ")}] in page body.`
+      };
     }
 
     // Injected script detection
