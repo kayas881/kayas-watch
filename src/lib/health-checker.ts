@@ -24,16 +24,16 @@ export async function checkSiteHealth(url: string): Promise<{
   
   try {
     const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 5000); // 5s timeout (was 10s)
+    const tid = setTimeout(() => controller.abort(), 8000); // 8s timeout — generous for slow Indian hosting
 
     const originalUrlObj = new URL(url);
 
-    // Phase 1: HEAD request — fast, no body download
+    // GET request — many cheap hosting providers don't support HEAD properly
     const res = await fetch(url, {
-      method: "HEAD",
+      method: "GET",
       signal: controller.signal,
       redirect: "follow",
-      headers: { "User-Agent": "Saral-Watch-Checker/1.0" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Saral-Watch-Checker/1.0)" },
     });
     
     clearTimeout(tid);
@@ -111,7 +111,7 @@ async function deepScanForCompromise(url: string): Promise<{
       method: "GET",
       signal: controller.signal,
       redirect: "follow",
-      headers: { "User-Agent": "Saral-Watch-Checker/1.0" },
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Saral-Watch-Checker/1.0)" },
     });
     clearTimeout(tid);
 
