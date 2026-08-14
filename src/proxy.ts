@@ -15,11 +15,12 @@ export const config = {
      * Match all request paths except for the ones starting with:
      * - api/auth (NextAuth endpoints)
      * - api/webhooks (Webhook endpoints)
+     * - api/cron (Cron job endpoints — authenticated via Bearer token)
      * - login (public login page)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    "/((?!api/auth|api/webhooks|login|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api/auth|api/webhooks|api/cron|login|_next/static|_next/image|favicon.ico).*)",
   ],
 };
