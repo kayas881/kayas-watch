@@ -148,7 +148,7 @@ async function deepScanForCompromise(url: string): Promise<{
     // Injected script detection
     const scriptSrcRegex = /<script[^>]+src=["']([^"']+)["']/gi;
     let match;
-    while ((match = scriptSrcRegex.exec(snippet)) !== null) {
+    while ((match = scriptSrcRegex.exec(rawSnippet)) !== null) {
       const srcUrl = match[1];
       if (srcUrl.startsWith("http")) {
         try {
