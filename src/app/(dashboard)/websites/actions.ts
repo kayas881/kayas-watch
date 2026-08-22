@@ -107,7 +107,7 @@ export async function bulkImportWebsites(rows: { category?: string; url: string;
         where: { url: finalUrl, clientId: client.id }
       });
 
-      let descriptionParts = [];
+      const descriptionParts = [];
       if (row.category) descriptionParts.push(`Category: ${row.category}`);
       if (row.notes) descriptionParts.push(`Notes: ${row.notes}`);
       const finalDescription = descriptionParts.length > 0 ? descriptionParts.join("\n") : undefined;
