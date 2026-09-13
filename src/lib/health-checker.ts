@@ -10,6 +10,24 @@ const SUSPICIOUS_TLDS = [
   ".xyz", ".top", ".buzz", ".click", ".loan", ".club", ".vip", ".win"
 ];
 
+const BROWSER_CHALLENGE_PATTERNS = [
+  "checking your browser before accessing",
+  "verify you are human",
+  "performing security verification",
+  "please complete the security check",
+  "just a moment...",
+  "enable javascript and cookies to continue",
+];
+
+const RETRYABLE_HTTP_STATUSES = new Set([
+  408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 525,
+]);
+
+export function hasBrowserVerificationChallenge(html: string) {
+  const content = html.toLowerCase();
+  return BROWSER_CHALLENGE_PATTERNS.some((pattern) => content.includes(pattern));
+}
+
 export type MonitorHealthStatus = "UP" | "DOWN" | "DEGRADED" | "COMPROMISED";
 
 export interface SiteHealthResult {
@@ -141,6 +159,7 @@ export async function checkSiteHealth(url: string): Promise<SiteHealthResult> {
  */
 async function deepScanForCompromise(url: string): Promise<{
   isCompromised: boolean;
+  isBrowserChallenge?: boolean;
   detail?: string;
 }> {
   try {
@@ -159,6 +178,14 @@ async function deepScanForCompromise(url: string): Promise<{
 
     const text = await res.text();
     const rawSnippet = text.substring(0, 50000).toLowerCase();
+
+    if (hasBrowserVerificationChallenge(rawSnippet)) {
+      return {
+        isCompromised: false,
+        isBrowserChallenge: true,
+        detail: "Browser verification challenge detected — automated checks may be blocked even though the site loads after verification in a browser.",
+      };
+    }
 
     // Strip out <script>...</script> and <style>...</style> blocks before scanning
     // These often contain false positive keywords in minified code, analytics, theme files
@@ -239,6 +266,27 @@ async function processBatch<T>(items: T[], batchSize: number, fn: (item: T) => P
   }
 }
 
+function isRetryableFailure(result: SiteHealthResult) {
+  return result.status === "DOWN" && (
+    result.httpStatusCode === 0 ||
+    (result.httpStatusCode !== undefined && RETRYABLE_HTTP_STATUSES.has(result.httpStatusCode))
+  );
+}
+
+async function checkMonitorWithRetry(url: string, retryPolicy: number) {
+  let result = await checkSiteHealth(url);
+  // One bounded retry catches brief CDN, WAF, and network failures without
+  // allowing a batch of unhealthy sites to exceed the cron route's time limit.
+  const retries = Math.min(Math.max(retryPolicy, 0), 1);
+
+  for (let attempt = 0; attempt < retries && isRetryableFailure(result); attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    result = await checkSiteHealth(url);
+  }
+
+  return result;
+}
+
 export async function checkAllMonitors() {
   const monitors = await prisma.monitor.findMany({ where: { isActive: true } });
   
@@ -253,7 +301,7 @@ export async function checkAllMonitors() {
 
   // Phase 1: Quick health check in batches of 10
   await processBatch(monitors, 10, async (m) => {
-    const result = await checkSiteHealth(m.url);
+    const result = await checkMonitorWithRetry(m.url, m.retryPolicy);
     
     checked++;
 
@@ -306,7 +354,21 @@ export async function checkAllMonitors() {
   // Phase 2: Deep content scan on UP sites (batches of 5 — these download HTML)
   await processBatch(upMonitors, 5, async (m) => {
     const scan = await deepScanForCompromise(m.url);
-    if (scan.isCompromised) {
+    if (scan.isBrowserChallenge) {
+      up--;
+      degraded++;
+      await prisma.monitor.update({
+        where: { id: m.id },
+        data: { status: "DEGRADED" }
+      });
+      await handleMonitorStatusChange(
+        m.id,
+        "DEGRADED",
+        scan.detail ?? "Browser verification challenge detected",
+        undefined,
+        scan.detail
+      );
+    } else if (scan.isCompromised) {
       // Downgrade from UP to COMPROMISED
       up--;
       compromised++;
