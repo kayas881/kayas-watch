@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Plus, Activity, ExternalLink, Globe, Pause, Play, CheckCircle2, XCircle, ShieldAlert } from "lucide-react";
+import { Plus, Activity, ExternalLink, Globe, Pause, CheckCircle2, XCircle, ShieldAlert, TriangleAlert } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth-utils";
 
 export const dynamic = "force-dynamic";
@@ -82,6 +82,10 @@ export default async function MonitorsPage() {
                       ) : monitor.status === "COMPROMISED" ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
                           <ShieldAlert className="w-3.5 h-3.5" /> Compromised
+                        </span>
+                      ) : monitor.status === "DEGRADED" ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                          <TriangleAlert className="w-3.5 h-3.5" /> Degraded
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-rose-500/10 text-rose-400">

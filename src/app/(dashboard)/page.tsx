@@ -54,6 +54,7 @@ export default async function DashboardPage() {
     totalMonitors,
     sitesUp,
     sitesDown,
+    sitesDegraded,
     sitesCompromised,
     activeIncidents,
     openIncidents,
@@ -64,6 +65,7 @@ export default async function DashboardPage() {
     prisma.monitor.count(),
     prisma.monitor.count({ where: { status: "UP" } }),
     prisma.monitor.count({ where: { status: "DOWN" } }),
+    prisma.monitor.count({ where: { status: "DEGRADED" } }),
     prisma.monitor.count({ where: { status: "COMPROMISED" } }),
     prisma.incident.count({ where: { status: "OPEN" } }),
 
@@ -113,7 +115,7 @@ export default async function DashboardPage() {
   // Build per-client health summary
   const clientHealth = allClientsWithHealth.map((client) => {
     const allMonitors = client.websites.flatMap((w) => w.monitors);
-    const down = allMonitors.filter((m) => m.status === "DOWN" || m.status === "COMPROMISED").length;
+    const down = allMonitors.filter((m) => m.status === "DOWN" || m.status === "DEGRADED" || m.status === "COMPROMISED").length;
     const total = allMonitors.length;
     return { id: client.id, name: client.companyName, total, down, up: total - down };
   }).sort((a, b) => b.down - a.down); // Most affected first
@@ -135,11 +137,11 @@ export default async function DashboardPage() {
               "text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider",
               sitesCompromised > 0
                 ? "bg-red-500/10 text-red-400 border border-red-500/20"
-                : sitesDown === 0
+                : sitesDown === 0 && sitesDegraded === 0
                 ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                 : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
             )}>
-              {sitesCompromised > 0 ? `🚨 ${sitesCompromised} SITES COMPROMISED` : sitesDown === 0 ? "● All Systems Operational" : `● ${sitesDown} Sites Down`}
+              {sitesCompromised > 0 ? `🚨 ${sitesCompromised} SITES COMPROMISED` : sitesDown > 0 ? `● ${sitesDown} Sites Down` : sitesDegraded > 0 ? `⚠ ${sitesDegraded} Sites Degraded` : "● All Systems Operational"}
             </span>
           </div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Dashboard Overview</h1>
@@ -178,6 +180,8 @@ export default async function DashboardPage() {
             ? { value: `${sitesCompromised} COMPROMISED`, label: "critical attention needed", color: "red" } 
             : sitesDown > 0
             ? { value: `${sitesDown} DOWN`, label: "need attention", color: "red" }
+            : sitesDegraded > 0
+            ? { value: `${sitesDegraded} DEGRADED`, label: "security or connection issue", color: "amber" }
             : { value: "All clear", label: "no issues", color: "green" }
           }
         />

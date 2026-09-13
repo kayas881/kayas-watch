@@ -1,8 +1,9 @@
 import { prisma } from "./prisma";
+import type { MonitorHealthStatus } from "./health-checker";
 
 export async function handleMonitorStatusChange(
   monitorId: string,
-  status: "UP" | "DOWN" | "COMPROMISED",
+  status: MonitorHealthStatus,
   summary: string,
   httpStatusCode?: number,
   errorDetail?: string
@@ -31,8 +32,8 @@ export async function handleMonitorStatusChange(
     }
   });
 
-  if (status === "DOWN" || status === "COMPROMISED") {
-    const severity = status === "COMPROMISED" ? "CRITICAL" : "HIGH";
+  if (status === "DOWN" || status === "DEGRADED" || status === "COMPROMISED") {
+    const severity = status === "COMPROMISED" ? "CRITICAL" : status === "DOWN" ? "HIGH" : "MEDIUM";
     
     if (!existingIncident) {
       const newIncident = await prisma.incident.create({
@@ -53,7 +54,7 @@ export async function handleMonitorStatusChange(
         where: { id: existingIncident.id },
         data: {
           severity: existingIncident.severity === "CRITICAL" ? "CRITICAL" : severity,
-          summary: status === "COMPROMISED" && !existingIncident.summary?.includes("SECURITY") ? summary : existingIncident.summary,
+          summary,
           httpStatusCode: httpStatusCode ?? existingIncident.httpStatusCode,
           errorDetail: errorDetail ?? existingIncident.errorDetail,
         }

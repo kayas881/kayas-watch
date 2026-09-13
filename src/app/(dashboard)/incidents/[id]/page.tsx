@@ -112,6 +112,20 @@ export default async function IncidentDetailPage({ params }: { params: Promise<{
                   {incident.summary || "No summary provided by the automated monitor alert."}
                 </div>
               </div>
+
+              {(incident.httpStatusCode !== null || incident.errorDetail) && (
+                <div className="col-span-2">
+                  <div className="text-sm text-zinc-500 mb-1">Detected Error</div>
+                  <div className="text-sm text-amber-200 bg-amber-500/5 p-4 rounded-lg border border-amber-500/20">
+                    {incident.httpStatusCode === 0
+                      ? "No HTTP response"
+                      : incident.httpStatusCode !== null
+                      ? `HTTP ${incident.httpStatusCode}`
+                      : "Connection error"}
+                    {incident.errorDetail ? ` — ${incident.errorDetail}` : ""}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

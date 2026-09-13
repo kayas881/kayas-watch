@@ -10,16 +10,47 @@ const SUSPICIOUS_TLDS = [
   ".xyz", ".top", ".buzz", ".click", ".loan", ".club", ".vip", ".win"
 ];
 
+export type MonitorHealthStatus = "UP" | "DOWN" | "DEGRADED" | "COMPROMISED";
+
+export interface SiteHealthResult {
+  status: MonitorHealthStatus;
+  httpStatusCode?: number;
+  errorDetail?: string;
+  responseTimeMs?: number;
+}
+
+type FetchError = Error & {
+  code?: string;
+  cause?: { code?: string; message?: string };
+};
+
+function getCertificateDetail(error: FetchError) {
+  const evidence = `${error.code ?? ""} ${error.cause?.code ?? ""} ${error.message ?? ""} ${error.cause?.message ?? ""}`.toLowerCase();
+
+  if (evidence.includes("cert_has_expired") || evidence.includes("cert_expired") || evidence.includes("certificate has expired")) {
+    return "HTTPS certificate expired — the site may load, but browsers will show a security warning.";
+  }
+  if (evidence.includes("cert_not_yet_valid") || evidence.includes("certificate is not yet valid")) {
+    return "HTTPS certificate is not valid yet — browsers will show a security warning.";
+  }
+  if (evidence.includes("altname") || evidence.includes("hostname mismatch")) {
+    return "HTTPS certificate hostname mismatch — the certificate does not match this domain.";
+  }
+  if (evidence.includes("self_signed") || evidence.includes("self-signed")) {
+    return "HTTPS certificate is self-signed and is not trusted by browsers.";
+  }
+  if (evidence.includes("unable_to_verify") || evidence.includes("unable to verify") || evidence.includes("unknown ca")) {
+    return "HTTPS certificate chain cannot be verified by browsers.";
+  }
+
+  return null;
+}
+
 /**
  * Phase 1: Quick health check — just verify the site responds.
  * Uses a HEAD-then-GET strategy with a short timeout.
  */
-export async function checkSiteHealth(url: string): Promise<{ 
-  status: "UP" | "DOWN" | "COMPROMISED"; 
-  httpStatusCode?: number; 
-  errorDetail?: string; 
-  responseTimeMs?: number;
-}> {
+export async function checkSiteHealth(url: string): Promise<SiteHealthResult> {
   const startTime = Date.now();
   
   try {
@@ -29,14 +60,18 @@ export async function checkSiteHealth(url: string): Promise<{
     const originalUrlObj = new URL(url);
 
     // GET request — many cheap hosting providers don't support HEAD properly
-    const res = await fetch(url, {
-      method: "GET",
-      signal: controller.signal,
-      redirect: "follow",
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; Saral-Watch-Checker/1.0)" },
-    });
-    
-    clearTimeout(tid);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "GET",
+        signal: controller.signal,
+        redirect: "follow",
+        cache: "no-store",
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; Saral-Watch-Checker/1.0)" },
+      });
+    } finally {
+      clearTimeout(tid);
+    }
     const responseTimeMs = Date.now() - startTime;
 
     // 1. Check for Redirect Hijack
@@ -70,26 +105,31 @@ export async function checkSiteHealth(url: string): Promise<{
     // Content scanning runs separately (Phase 2) so it doesn't slow down the main check.
     return { status: "UP", httpStatusCode: res.status, responseTimeMs };
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     const responseTimeMs = Date.now() - startTime;
-    const cause = err.cause;
-    const causeMsg = cause?.message || cause?.code || "";
-    const combined = `${err.message || ""} ${causeMsg}`.toLowerCase();
+    const fetchError = err as FetchError;
+    const certificateDetail = getCertificateDetail(fetchError);
+    if (certificateDetail) {
+      return { status: "DEGRADED", errorDetail: certificateDetail, responseTimeMs };
+    }
 
-    const isTimeout = err.name === "AbortError" || combined.includes("etimedout") || combined.includes("timed out");
-    const isCert = combined.includes("certificate") || combined.includes("ssl") || combined.includes("self_signed") || combined.includes("tls") || combined.includes("cert_");
+    const cause = fetchError.cause;
+    const causeMsg = cause?.message || cause?.code || "";
+    const combined = `${fetchError.message || ""} ${causeMsg}`.toLowerCase();
+
+    const isTimeout = fetchError.name === "AbortError" || combined.includes("etimedout") || combined.includes("timeout") || combined.includes("timed out");
     const isDns = combined.includes("enotfound") || combined.includes("getaddrinfo") || combined.includes("nodename") || combined.includes("name or service");
     const isRefused = combined.includes("econnrefused") || combined.includes("connection refused");
     const isReset = combined.includes("econnreset") || combined.includes("connection reset");
 
     let detail = "Server unreachable — no response";
     if (isTimeout) detail = "Connection timed out — server not responding";
-    else if (isCert) detail = "SSL/TLS certificate error — certificate invalid or expired";
+    else if (combined.includes("tls") || combined.includes("ssl")) detail = "TLS handshake failed — secure connection could not be established";
     else if (isDns) detail = "DNS resolution failed — domain not found or unreachable";
     else if (isRefused) detail = "Connection refused — server is actively rejecting requests";
     else if (isReset) detail = "Connection reset by remote server";
     else if (causeMsg) detail = causeMsg;
-    else if (err.message && err.message !== "fetch failed") detail = err.message;
+    else if (fetchError.message && fetchError.message !== "fetch failed") detail = fetchError.message;
 
     return { status: "DOWN", httpStatusCode: 0, errorDetail: detail, responseTimeMs };
   }
@@ -175,15 +215,18 @@ async function deepScanForCompromise(url: string): Promise<{
 
 export function httpStatusLabel(code: number): string {
   const labels: Record<number, string> = {
-    400: "Bad Request", 401: "Unauthorized", 403: "Forbidden",
-    404: "Not Found", 405: "Method Not Allowed", 408: "Request Timeout",
-    429: "Too Many Requests", 500: "Internal Server Error",
-    501: "Not Implemented", 502: "Bad Gateway", 503: "Service Unavailable",
-    504: "Gateway Timeout", 508: "Loop Detected", 509: "Bandwidth Limit Exceeded",
+    400: "Bad Request", 401: "Unauthorized", 402: "Payment Required", 403: "Forbidden",
+    404: "Not Found", 405: "Method Not Allowed", 406: "Not Acceptable", 407: "Proxy Authentication Required",
+    408: "Request Timeout", 409: "Conflict", 410: "Gone", 411: "Length Required", 413: "Content Too Large",
+    414: "URI Too Long", 415: "Unsupported Media Type", 418: "I'm a teapot", 422: "Unprocessable Content",
+    423: "Locked", 424: "Failed Dependency", 425: "Too Early", 426: "Upgrade Required", 428: "Precondition Required",
+    429: "Too Many Requests", 431: "Request Header Fields Too Large", 451: "Unavailable For Legal Reasons",
+    500: "Internal Server Error", 501: "Not Implemented", 502: "Bad Gateway", 503: "Service Unavailable",
+    504: "Gateway Timeout", 505: "HTTP Version Not Supported", 507: "Insufficient Storage", 508: "Loop Detected", 509: "Bandwidth Limit Exceeded",
     520: "Unknown Error", 521: "Web Server Is Down", 522: "Connection Timed Out",
-    524: "A Timeout Occurred",
+    523: "Origin Is Unreachable", 524: "A Timeout Occurred", 525: "SSL Handshake Failed", 526: "Invalid SSL Certificate",
   };
-  return labels[code] || "Server Error";
+  return labels[code] || (code >= 500 ? "Server Error" : "Unexpected HTTP Response");
 }
 
 /**
@@ -202,6 +245,7 @@ export async function checkAllMonitors() {
   let checked = 0;
   let up = 0;
   let down = 0;
+  let degraded = 0;
   let compromised = 0;
 
   // Track which monitors passed Phase 1 (UP) for content scanning
@@ -226,6 +270,15 @@ export async function checkAllMonitors() {
     if (result.status === "UP") {
       up++;
       upMonitors.push({ id: m.id, url: m.url });
+    } else if (result.status === "DEGRADED") {
+      degraded++;
+      await handleMonitorStatusChange(
+        m.id,
+        "DEGRADED",
+        result.errorDetail ?? "Service is degraded",
+        result.httpStatusCode,
+        result.errorDetail
+      );
     } else if (result.status === "COMPROMISED") {
       compromised++;
       await handleMonitorStatusChange(
@@ -274,5 +327,5 @@ export async function checkAllMonitors() {
     }
   });
 
-  return { checked, up, down, compromised };
+  return { checked, up, down, degraded, compromised };
 }
