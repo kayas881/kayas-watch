@@ -20,7 +20,7 @@ async function main() {
   const csrfRes = await fetch("http://localhost:3000/api/auth/csrf");
   const csrfData = await csrfRes.json();
   const csrfToken = csrfData.csrfToken;
-  let cookieHeader = csrfRes.headers.getSetCookie();
+  const cookieHeader = csrfRes.headers.getSetCookie();
 
   const loginRes = await fetch("http://localhost:3000/api/auth/callback/credentials", {
     method: "POST",

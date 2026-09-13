@@ -1,65 +1,99 @@
-# kayas Watch
+# Saral Watch | Web & Infrastructure Monitor
 
-Internal web application to monitor client websites and services, built for kayas Infosoft. 
-Backed by [Uptime Kuma](https://github.com/louislam/uptime-kuma) as the monitoring engine.
+Saral Watch is a robust, multi-tenant SaaS-style web application built to monitor client websites, services, and APIs in real-time. By leveraging Uptime Kuma as its core monitoring engine, it offers a centralized, custom-built administrative dashboard for tracking uptime, managing incidents, and keeping an eye on your entire infrastructure.
 
-## Prerequisites
-- Node.js 18+
-- Docker & Docker Compose
+## 🚀 Features
 
-## Local Development Setup
+*   **Real-Time Monitoring:** Keep track of your websites and APIs with continuous HTTP, Ping, Port, Keyword, and DNS checks.
+*   **Centralized Dashboard:** A sleek, intuitive overview of all clients, active monitors, and ongoing incidents in one unified interface.
+*   **Incident Management:** Automated incident creation and tracking upon monitor failures, complete with severity levels and status updates.
+*   **Multi-Tenancy:** Organize monitors and incidents by clients, making it easy to manage multiple distinct organizations.
+*   **Uptime Kuma Integration:** Seamlessly syncs with Uptime Kuma for reliable, headless monitoring capabilities and instant webhook alerts.
+*   **Status Pages:** Public or private status pages for transparency and communication during downtime.
 
-1. **Start Infrastructure Services**
-   ```bash
-   docker-compose up -d
-   ```
-   This will spin up PostgreSQL (port `5432`) and Uptime Kuma (port `3001`).
+## 📸 Screenshots
 
-2. **Setup Environment Variables**
-   Create a `.env` file in the root based on `.env.example` (or just set the following defaults):
-   ```env
-   DATABASE_URL="postgresql://kayas:kayas_password@localhost:5432/kayas_watch?schema=public"
-   NEXTAUTH_SECRET="your-super-secret-jwt-key"
-   NEXTAUTH_URL="http://localhost:3000"
-   
-   # Uptime Kuma instance configuration
-   UPTIME_KUMA_URL="http://localhost:3001"
-   UPTIME_KUMA_USER="admin"
-   UPTIME_KUMA_PASSWORD="admin_password"
-   
-   # Seed Credentials
-   ADMIN_EMAIL="admin@kayasadmin.com"
-   ADMIN_PASSWORD="your_admin_password"
-   ```
-   *Note: Ensure you setup Uptime Kuma's initial user/password manually on `http://localhost:3001` matching the `UPTIME_KUMA_USER` and `UPTIME_KUMA_PASSWORD` before attempting to create monitors.*
+### Dashboard Overview
+Get a high-level view of your entire infrastructure's health. Track total clients, monitor uptime percentages, site statuses, and immediately spot open incidents.
 
-3. **Install Dependencies & Migrate DB**
-   ```bash
-   npm install
-   npx prisma migrate dev --name init
-   ```
+![Dashboard Overview](./public/images/dashboard.png)
 
-4. **Run the Database Seed (Important!)**
-   To log into the dashboard, you must seed the initial Admin user.
-   ```bash
-   npm run db:seed
-   ```
-   *(Wait, we configured `prisma: { seed: "tsx prisma/seed.ts" }` so the command is `npx prisma db seed`)*
-   ```bash
-   npx prisma db seed
-   ```
-   This command creates:
-   - SuperAdmin (`admin@kayasadmin.com` / `your_admin_password`)
-   - A mock Client ("Acme Corp")
-   - A mock Website for Acme Corp
+### Incident Management
+Track and manage monitor outages and degraded performance with detailed logs, allowing your team to respond to downtime effectively.
 
-5. **Start the Next.js Server**
-   ```bash
-   npm run dev
-   ```
-   Go to `http://localhost:3000` to interact with the API / Dashboard.
+![Incidents View](./public/images/incidents.jpeg)
 
-## Architecture & Integration
-- **Next.js API**: `/api/monitors` provisions monitors over Uptime Kuma's Socket API natively.
-- **Uptime Kuma Webhooks**: Monitor events hit `/api/webhooks/kuma` automatically via a programmatically injected Webhook Notification in Uptime Kuma.
-- **Incidents**: Database automation opens/resolves incidents based on webhook states natively.
+## 🛠️ Technology Stack
+
+*   **Frontend & API:** Next.js (App Router), React, Tailwind CSS
+*   **Database:** PostgreSQL with Prisma ORM
+*   **Monitoring Engine:** Uptime Kuma (Headless)
+*   **Authentication:** NextAuth.js
+*   **Containerization:** Docker & Docker Compose
+
+## 🏗️ Architecture
+
+Saral Watch employs a modern monolithic architecture using Next.js for both the user interface and API routes.
+
+1.  **Next.js Dashboard:** The main UI for managing clients, websites, monitors, and incidents.
+2.  **Uptime Kuma (Engine):** Handles the actual polling and checks.
+3.  **PostgreSQL Database:** Stores configuration, historical data, user accounts, and incident logs.
+4.  **Webhook Integration:** When Uptime Kuma detects a state change (e.g., a site goes down), it sends a webhook to the Next.js app, which processes the event and manages incidents automatically based on configured retry policies.
+
+For deeper insights, please refer to the [Architecture Document](architecture.md).
+
+## 🚦 Getting Started
+
+### Prerequisites
+
+*   Docker and Docker Compose
+*   Node.js (v18+)
+*   npm or pnpm
+
+### Local Development Setup
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/your-org/saral-watch.git
+    cd saral-watch
+    ```
+
+2.  **Install Dependencies:**
+    ```bash
+    npm install
+    ```
+
+3.  **Set up Environment Variables:**
+    Create a `.env` file based on a `.env.example` (if provided) or configure database URLs and NextAuth secrets.
+    ```env
+    DATABASE_URL="postgresql://user:password@localhost:5432/saralwatch"
+    NEXTAUTH_SECRET="your_secret_here"
+    NEXTAUTH_URL="http://localhost:3000"
+    ```
+
+4.  **Start Services (Database & Uptime Kuma):**
+    ```bash
+    docker-compose up -d
+    ```
+
+5.  **Initialize Database:**
+    ```bash
+    npm run build # Includes Prisma generate and db push
+    # OR
+    npx prisma db push
+    npx prisma generate
+    ```
+
+6.  **Run the Development Server:**
+    ```bash
+    npm run dev &
+    ```
+    Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! Feel free to check the issues page.
+
+## 📄 License
+
+This project is proprietary and intended for internal use.
