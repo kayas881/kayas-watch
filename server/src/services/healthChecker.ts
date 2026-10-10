@@ -93,7 +93,14 @@ export async function deepScanForCompromise(url: string) {
 }
 
 async function batched<T>(items: T[], size: number, fn: (item: T) => Promise<void>) { for (let i = 0; i < items.length; i += size) await Promise.allSettled(items.slice(i, i + size).map(fn)); }
-async function withRetry(url: string, retryPolicy: number) { let result = await checkSiteHealth(url); if (retryPolicy > 0 && result.status === "DOWN" && (result.httpStatusCode === 0 || (result.httpStatusCode !== undefined && RETRYABLE.has(result.httpStatusCode)))) { await new Promise(resolve => setTimeout(resolve, 500)); result = await checkSiteHealth(url); } return result; }
+async function withRetry(url: string, retryPolicy: number) {
+  let result = await checkSiteHealth(url);
+  for (let attempt = 0; attempt < retryPolicy && result.status === "DOWN" && (result.httpStatusCode === 0 || (result.httpStatusCode !== undefined && RETRYABLE.has(result.httpStatusCode))); attempt++) {
+    await new Promise(resolve => setTimeout(resolve, 500));
+    result = await checkSiteHealth(url);
+  }
+  return result;
+}
 
 export async function checkAllMonitors() {
   const monitors = await prisma.monitor.findMany({ where: { isActive: true } });

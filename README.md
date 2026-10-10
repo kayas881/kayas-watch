@@ -13,7 +13,14 @@ GRANT ALL PRIVILEGES ON saral_watch.* TO 'saral'@'localhost';
 FLUSH PRIVILEGES;
 ```
 
-Copy `.env.example` to `server/.env`, update `DATABASE_URL`, and set a random `JWT_SECRET` of at least 32 characters. Run `bash setup.sh` on Linux/macOS or `setup.bat` on Windows, followed by:
+Copy `.env.example` to `server/.env`, update `DATABASE_URL`, and set a random `JWT_SECRET` of at least 32 characters. On Linux/macOS, you can generate the secret with:
+
+```bash
+cp .env.example server/.env
+sed -i "s#replace-with-a-random-secret-at-least-32-characters-long#$(openssl rand -hex 32)#" server/.env
+```
+
+Replace the database credentials in `server/.env` with the MySQL credentials created above. On Windows, copy the file with `copy .env.example server\\.env` and set `JWT_SECRET` to a randomly generated value with at least 32 characters. Then run `bash setup.sh` on Linux/macOS or `setup.bat` on Windows, followed by:
 
 ```bash
 npm start
