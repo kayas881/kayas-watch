@@ -1,0 +1,15 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+@theme { --color-background:#0b0d14; --color-foreground:#f1f5f9; --color-primary:#7c52a2; --color-surface:#111420; --color-border:#1e2436; }
+* { box-sizing:border-box; }
+body { margin:0; background:#0b0d14; color:#f1f5f9; font-family:'Montserrat',sans-serif; -webkit-font-smoothing:antialiased; }
+button,a { cursor:pointer; }
+.glass { background:rgba(17,20,32,.75); backdrop-filter:blur(16px); border:1px solid rgba(124,82,162,.2); }
+.saral-card { background:linear-gradient(135deg,rgba(124,82,162,.12),rgba(139,92,246,.05),rgba(17,20,32,.8)); backdrop-filter:blur(16px); border:1px solid rgba(139,92,246,.25); box-shadow:0 12px 30px rgba(124,82,162,.1); }
+.glow { box-shadow:0 0 25px rgba(124,82,162,.25); }
+.field { width:100%; background:rgba(24,24,27,.55); border:1px solid #27272a; border-radius:.65rem; padding:.7rem .9rem; color:#e4e4e7; font-size:.875rem; outline:none; }
+.field:focus { border-color:#8b5cf6; box-shadow:0 0 0 1px #8b5cf6; }
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:.45rem; border-radius:.65rem; padding:.65rem 1rem; font-size:.875rem; font-weight:600; transition:.2s; }
+.btn-primary { background:#7c3aed; color:white; }.btn-primary:hover{background:#8b5cf6}.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-ghost { color:#a1a1aa; border:1px solid #27272a; }.btn-ghost:hover{color:white;background:rgba(255,255,255,.05)}
+.table-row:hover { background:rgba(124,82,162,.05); }

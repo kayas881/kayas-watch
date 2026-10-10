@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  name      String?
+  email     String   @unique
+  password  String
+  role      String   @default("ADMIN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Client {
+  id              String    @id @default(uuid()) @db.VarChar(36)
+  companyName     String
+  primaryDomain   String?
+  contactPerson   String?
+  contactEmail    String?
+  supportSla      String?
+  maintenancePlan String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  websites        Website[]
+}
+
+model Website {
+  id          String    @id @default(uuid()) @db.VarChar(36)
+  clientId    String    @db.VarChar(36)
+  name        String
+  url         String
+  description String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  client      Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  monitors    Monitor[]
+
+  @@index([clientId])
+}
+
+model Monitor {
+  id              String        @id @default(uuid()) @db.VarChar(36)
+  websiteId       String        @db.VarChar(36)
+  name            String
+  type            String        @default("HTTP")
+  url             String
+  intervalSeconds Int           @default(60)
+  retryPolicy     Int           @default(3)
+  isActive        Boolean       @default(true)
+  status          String        @default("UP")
+  responseTimeMs  Int?
+  lastCheckTime   DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  website         Website       @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  pings           MonitorPing[]
+
+  @@index([websiteId])
+  @@index([status])
+}
+
+model MonitorPing {
+  id             String   @id @default(uuid()) @db.VarChar(36)
+  monitorId      String   @db.VarChar(36)
+  status         String
+  responseTimeMs Int?
+  httpStatusCode Int?
+  errorDetail    String?  @db.Text
+  checkedAt      DateTime @default(now())
+  monitor        Monitor  @relation(fields: [monitorId], references: [id], onDelete: Cascade)
+
+  @@index([monitorId, checkedAt])
+}

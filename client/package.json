@@ -1,0 +1,36 @@
+{
+  "name": "saral-watch-client",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest run --environment jsdom",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.1.14",
+    "axios": "^1.9.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.53.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.6.1",
+    "tailwind-merge": "^3.6.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^5.0.4",
+    "jsdom": "^26.1.0",
+    "tailwindcss": "^4.1.14",
+    "typescript": "^5",
+    "vite": "^7.1.7",
+    "vitest": "^4.1.11"
+  }
+}
