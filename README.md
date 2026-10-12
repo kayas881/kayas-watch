@@ -16,6 +16,26 @@ Check history is retained for seven days. The built-in scheduler checks every ac
 
 > The project does not currently send email, SMS, WhatsApp, Slack, or Telegram alerts. It is a dashboard-based monitoring tool.
 
+## Screenshots
+
+### Dashboard overview
+
+The dashboard combines availability, response-time trends, status distribution, and the most urgent monitor findings in one view.
+
+![Saral Watch dashboard showing monitor health and sites requiring attention](screenshots/Dashboard.png)
+
+### Monitor diagnosis and history
+
+Each monitor has a dedicated detail page with its latest result, configuration, finding, and recent check history.
+
+![Saral Watch monitor detail page showing a TLS failure and recent history](screenshots/Monitors.png)
+
+### Website management
+
+The Websites page provides searchable, filterable website health at a glance, with import and monitor-sync actions for administrators.
+
+![Saral Watch website management table with current monitor statuses](screenshots/Websites.png)
+
 ## Requirements
 
 For local development:
@@ -38,6 +58,7 @@ client/                 React + Vite dashboard
 server/                 Express API, scheduler, Prisma schema, and seed script
 server/prisma/          MySQL schema and initial-user seed
 server/public/          Generated dashboard build; created by npm run build
+screenshots/            Product screenshots displayed in this README
 .env.example            Environment-variable template
 ```
 
