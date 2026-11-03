@@ -17,6 +17,8 @@ import { startHealthCron } from "./cron/healthCron.js";
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) throw new Error("JWT_SECRET must be configured with at least 32 characters");
 const app = express();
 app.disable("x-powered-by");
+// Saral Watch is served behind one reverse proxy in production (Hostinger/Nginx).
+app.set("trust proxy", 1);
 app.use(cors({ origin: process.env.CLIENT_URL || "http://localhost:5173" }));
 app.use(express.json({ limit: "2mb" }));
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
