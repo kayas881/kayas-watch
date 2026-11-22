@@ -1,5 +1,7 @@
 # Saral Watch
 
+[![CI](https://github.com/kayas881/kayas-watch/actions/workflows/ci.yml/badge.svg)](https://github.com/kayas881/kayas-watch/actions/workflows/ci.yml)
+
 Saral Watch is a self-hosted website-monitoring dashboard. It lets a team organise clients and websites, run HTTP availability checks, review response times and incidents, and manage access for administrators and viewers.
 
 The application is built with React, Express, and MySQL. One Node.js process serves both the dashboard and the API, and also runs the scheduled monitor checks.
